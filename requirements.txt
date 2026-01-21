@@ -2,3 +2,5 @@ langchain
 langchain_communtiy
 PyPDF2
 python
+FASTAPI
+streamlit

@@ -35,10 +35,15 @@ It combines **document retrieval** with **context-aware generation** to answer u
 ## 📂 Project Structure
 
 RAG-Pipeline/
+
 │
+
 ├── api.py
+
 ├── main.py
+
 ├── app.py
+
 ├── requirements.txt
 
 

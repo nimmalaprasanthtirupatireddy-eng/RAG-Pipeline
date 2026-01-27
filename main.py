@@ -187,7 +187,7 @@
 
 from PyPDF2 import PdfReader 
 from langchain.text_splitter import RecursiveCharacterTextSplitter 
-from langchain.embeddings import HuggingFaceEmbeddings 
+from langchain_huggingface import HuggingFaceEmbeddings 
 from langchain.chains import RetrievalQA 
 from langchain.llms import Ollama 
 from langchain.vectorstores import FAISS

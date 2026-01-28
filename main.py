@@ -188,9 +188,11 @@
 from PyPDF2 import PdfReader 
 from langchain.text_splitter import RecursiveCharacterTextSplitter 
 from langchain_huggingface import HuggingFaceEmbeddings 
-from langchain.chains import RetrievalQA 
+from langchain_core.runnables import RunnablePassthrough
 from langchain.llms import Ollama 
 from langchain.vectorstores import FAISS
+from langchain_core.prompts import PromptTemplate
+from langchain_core.output_parsers import StrOutputParser
 
 class SimpleRAG: 
     def __init__(self): 
@@ -199,6 +201,23 @@ class SimpleRAG:
             ) 
         self.llm = Ollama(model="gemma2:2b") 
         self.vector_db = None 
+        self.prompt = PromptTemplate(
+            template="""
+            Your an Helpful Assistant
+            Use the following context to answer the question.
+            If the answer is not in the context, say "I don't know".
+            
+            Content:
+            {content}
+
+            Question:
+            {question}
+
+            Answer:
+            """,
+            input_variables=["content","question"]
+        )
+        self.parser = StrOutputParser()
     
     def read_text(self, pdf_path): 
         reader = PdfReader(pdf_path) 
@@ -221,10 +240,16 @@ class SimpleRAG:
     def ask_question(self, question): 
         if self.vector_db is None: 
             raise ValueError("Vector DB not initialized") 
-        qa_chain = RetrievalQA.from_chain_type( 
-            llm=self.llm, 
-            retriever=self.vector_db.as_retriever(), 
-            return_source_documents=False 
-            ) 
-        
-        return qa_chain.run(question)
+        retriever = self.vector_db.as_retriever()
+
+        rag_chain = (
+            {
+                "content":retriever,
+                "question":RunnablePassthrough()
+            }
+            |self.prompt
+            |self.llm
+            |self.parser
+        )
+
+        return rag_chain.invoke(question)

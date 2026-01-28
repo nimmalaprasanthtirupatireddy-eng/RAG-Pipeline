@@ -21,7 +21,7 @@ def upload_pdf(file: UploadFile = File(...)):
         rag.store_in_vector_db(chunks) 
     return {"message": "PDF processed and stored successfully"} 
 
-@app.post("/ask/") 
+@app.get("/ask/") 
 def ask_question(question: str): 
     answer = rag.ask_question(question) 
     return {"answer": answer}

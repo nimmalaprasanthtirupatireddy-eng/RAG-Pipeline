@@ -31,16 +31,13 @@ from main import SimpleRAG
 
 app = FastAPI(title="Simple RAG API")
 
-# 🔥 PDFs load automatically inside SimpleRAG.__init__()
 rag = SimpleRAG()
-
 
 @app.get("/")
 def health():
     return {"status": "RAG API running"}
 
-
 @app.post("/ask/")
-def ask_question(question: str):
-    answer = rag.ask_question(question)
+async def ask_question(question: str):
+    answer =await rag.ask_question(question)
     return {"answer": answer}

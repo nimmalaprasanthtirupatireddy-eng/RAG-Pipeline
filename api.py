@@ -11,17 +11,17 @@ UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True) 
 
 @app.post("/upload-pdf/") 
-def upload_pdf(file: UploadFile = File(...)): 
+async def upload_pdf(file: UploadFile = File(...)): 
     file_path = os.path.join(UPLOAD_DIR, file.filename) 
     
     with open(file_path, "wb") as buffer: 
         shutil.copyfileobj(file.file, buffer) 
-        text = rag.read_text(file_path) 
-        chunks = rag.chunk_text(text) 
-        rag.store_in_vector_db(chunks) 
+        text =await rag.read_text(file_path) 
+        chunks =await rag.chunk_text(text) 
+        await rag.store_in_vector_db(chunks) 
     return {"message": "PDF processed and stored successfully"} 
 
-@app.get("/ask/") 
-def ask_question(question: str): 
-    answer = rag.ask_question(question) 
+@app.post("/ask/") 
+async def ask_question(question: str): 
+    answer = await rag.ask_question(question) 
     return {"answer": answer}

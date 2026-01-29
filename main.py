@@ -188,7 +188,6 @@ class SimpleRAG:
             self.vector_db.add_texts(chunks)
             logger.info("Vector DB updated with new chunks")
 
-    # ✅ Directory loader
     def load_pdfs_from_directory(self, pdf_dir):
         logger.info(f"Loading PDFs from directory: {pdf_dir}")
 
@@ -202,14 +201,12 @@ class SimpleRAG:
 
                 text = self.read_text(pdf_path)
 
-                # ✅ SKIP empty PDFs
                 if not text.strip():
                     logger.warning(f"Skipping empty PDF: {file_name}")
                     continue
 
                 chunks = self.chunk_text(text)
 
-                # ✅ SKIP empty chunks
                 if not chunks:
                     logger.warning(f"No chunks created for: {file_name}")
                     continue

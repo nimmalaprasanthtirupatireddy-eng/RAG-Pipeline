@@ -267,13 +267,13 @@ from utils.simple_rag import SimpleRAG
 if __name__ == "__main__":
     rag = SimpleRAG()
 
-    pdf_path = "C:\\Users\\nimma\\OneDrive\\Desktop\\RAG-Pipeline\\uploads\\Attention All You Need.pdf"
-    text = rag.read_text(pdf_path)
-    chunks = rag.chunk_text(text)
-    rag.store_in_vector_db(chunks)
+#     pdf_path = "C:\\Users\\nimma\\OneDrive\\Desktop\\RAG-Pipeline\\uploads\\Attention All You Need.pdf"
+#     text = rag.read_text(pdf_path)
+#     chunks = rag.chunk_text(text)
+#     rag.store_in_vector_db(chunks)
 
-    question = "What is the document about?"
-    answer = rag.ask_question(question)
+#     question = "What is the document about?"
+#     answer = rag.ask_question(question)
 
-    print("\nAnswer:")
-    print(answer)
+#     print("\nAnswer:")
+#     print(answer)

@@ -1,0 +1,43 @@
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain.llms import Ollama
+
+from .logger import logger
+from .pdf_reader import read_pdf_text
+from .text_splitter import split_text
+from .vector_store import create_or_update_vector_db
+from .llm_chain import build_llm_chain
+
+
+class SimpleRAG:
+
+    def __init__(self):
+        logger.info("Initializing SimpleRAG")
+        self.embeddings = HuggingFaceEmbeddings(
+            model_name="sentence-transformers/all-MiniLM-L6-v2"
+        )
+        self.llm = Ollama(model="gemma2:2b")
+        self.vector_db = None
+        logger.info("SimpleRAG initialized successfully")
+
+    def read_text(self, pdf_path):
+        return read_pdf_text(pdf_path)
+
+    def chunk_text(self, text):
+        return split_text(text)
+
+    def store_in_vector_db(self, chunks):
+        self.vector_db = create_or_update_vector_db(
+            chunks, self.embeddings, self.vector_db
+        )
+
+    def ask_question(self, question):
+        if self.vector_db is None:
+            raise ValueError("Vector DB not initialized")
+
+        logger.info(f"Received question: {question}")
+        retriever = self.vector_db.as_retriever()
+
+        rag_chain = build_llm_chain(self.llm, retriever)
+        answer = rag_chain.invoke(question)
+
+        return answer

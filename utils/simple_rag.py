@@ -1,6 +1,7 @@
 from langchain_huggingface import HuggingFaceEmbeddings
-from langchain.llms import Ollama
-
+from langchain_community.llms import Ollama
+import os
+from langchain_community.vectorstores import FAISS
 from .logger import logger
 from .pdf_reader import read_pdf_text
 from .text_splitter import split_text
@@ -16,7 +17,16 @@ class SimpleRAG:
             model_name="sentence-transformers/all-MiniLM-L6-v2"
         )
         self.llm = Ollama(model="gemma2:2b")
-        self.vector_db = None
+        if os.path.exists("faiss_db"):
+            logger.info("Loading existing FAISS database")
+            self.vector_db = FAISS.load_local(
+                "faiss_db",
+                self.embeddings,
+                allow_dangerous_deserialization=True
+            )
+        else:
+            logger.info("No existing FAISS DB. Starting fresh.")
+            self.vector_db = None
         logger.info("SimpleRAG initialized successfully")
 
     def read_text(self, pdf_path):
@@ -25,9 +35,9 @@ class SimpleRAG:
     def chunk_text(self, text):
         return split_text(text)
 
-    def store_in_vector_db(self, chunks):
+    def store_in_vector_db(self, chunks, metadatas=None):
         self.vector_db = create_or_update_vector_db(
-            chunks, self.embeddings, self.vector_db
+            chunks, self.embeddings, self.vector_db, metadatas=metadatas
         )
 
     def ask_question(self, question):

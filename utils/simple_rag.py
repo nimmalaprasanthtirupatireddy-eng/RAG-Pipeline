@@ -51,3 +51,13 @@ class SimpleRAG:
         answer = rag_chain.invoke(question)
 
         return answer
+
+    def clear_database(self):
+        """Clears the vector database and resets the state."""
+        import shutil
+        if os.path.exists("faiss_db"):
+            shutil.rmtree("faiss_db")
+        
+        self.vector_db = None
+        logger.info("Database cleared")
+        return True

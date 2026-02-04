@@ -113,6 +113,12 @@ def ask_question(question: str):
     answer = rag.ask_question(question)
     return {"answer": answer}
 
+
+@app.post("/clear-db/")
+def clear_db():
+    rag.clear_database()
+    return {"message": "Database cleared successfully"}
+
 from fastapi.middleware.cors import CORSMiddleware
 
 app.add_middleware(

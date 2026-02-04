@@ -58,7 +58,14 @@ const elements = {
     confirmDelete: document.getElementById('confirmDelete'),
 
     // Scroll Button
-    scrollTopBtn: document.getElementById('scrollTopBtn')
+    scrollTopBtn: document.getElementById('scrollTopBtn'),
+
+    // Clear DB
+    clearDbBtn: document.getElementById('clearDbBtn'),
+    clearDbModal: document.getElementById('clearDbModal'),
+    closeClearDbModal: document.getElementById('closeClearDbModal'),
+    cancelClearDb: document.getElementById('cancelClearDb'),
+    confirmClearDb: document.getElementById('confirmClearDb')
 };
 
 // ================================
@@ -73,6 +80,8 @@ let state = {
     chats: [],
     currentChatId: null
 };
+
+
 
 // ================================
 // Local Storage Keys
@@ -533,9 +542,63 @@ async function askQuestion(question) {
 
         showToast(error.message || 'Failed to get answer', 'error');
     } finally {
-        elements.questionInput.disabled = false;
-        elements.sendBtn.disabled = false;
         elements.questionInput.focus();
+    }
+}
+
+function openClearDbModal() {
+    if (elements.clearDbModal) elements.clearDbModal.classList.add('show');
+}
+
+function closeClearDbModal() {
+    if (elements.clearDbModal) elements.clearDbModal.classList.remove('show');
+}
+
+async function clearDatabase() {
+    // This function is now just the action performer
+    closeClearDbModal();
+
+    // Animate removal first
+    const listItems = elements.documentsList.querySelectorAll('li');
+
+    if (listItems.length > 0) {
+        // Staggered animation
+        Array.from(listItems).forEach((li, index) => {
+            setTimeout(() => {
+                li.classList.add('slide-out-right');
+            }, index * 50);
+        });
+
+        // Wait for animation to finish before clearing state
+        await new Promise(r => setTimeout(r, (listItems.length * 50) + 500));
+    }
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/clear-db/`, {
+            method: 'POST'
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to clear database');
+        }
+
+        const data = await response.json();
+
+        // Clear local state
+        state.uploadedDocuments = [];
+        state.isDocumentProcessed = false;
+        saveToStorage();
+        renderDocumentsList();
+        updateInputState();
+
+        showToast('Database cleared & particles reset!', 'success');
+
+        // Close drawer
+        elements.docsDrawer.classList.remove('open');
+
+    } catch (error) {
+        console.error('Clear DB error:', error);
+        showToast('Failed to clear database', 'error');
     }
 }
 
@@ -667,6 +730,22 @@ function initEventListeners() {
         e.stopPropagation();
         elements.docsDrawer.classList.toggle('open');
     });
+
+    // Clear DB
+    if (elements.clearDbBtn) {
+        elements.clearDbBtn.addEventListener('click', openClearDbModal);
+    }
+
+    // Clear DB Modal Listeners
+    if (elements.closeClearDbModal) elements.closeClearDbModal.addEventListener('click', closeClearDbModal);
+    if (elements.cancelClearDb) elements.cancelClearDb.addEventListener('click', closeClearDbModal);
+    if (elements.confirmClearDb) elements.confirmClearDb.addEventListener('click', clearDatabase);
+
+    if (elements.clearDbModal) {
+        elements.clearDbModal.addEventListener('click', (e) => {
+            if (e.target === elements.clearDbModal) closeClearDbModal();
+        });
+    }
 
     // Close Docs Drawer when clicking outside
     document.addEventListener('click', (e) => {

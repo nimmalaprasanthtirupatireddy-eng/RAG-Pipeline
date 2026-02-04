@@ -782,6 +782,7 @@ h3 {
     margin-bottom: 16px;
     background: linear-gradient(135deg, #fff, #94a3b8);
     -webkit-background-clip: text;
+    background-clip: text;
     -webkit-text-fill-color: transparent;
 }
 
@@ -1082,4 +1083,119 @@ h3 {
 .documents-list li {
     list-style: none;
     /* Fix bullets showing */
+}
+
+/* Clear DB Button */
+.clear-db-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: rgba(239, 68, 68, 0.1);
+    color: var(--error);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    border-radius: var(--radius-sm);
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    margin-bottom: 10px;
+}
+
+.clear-db-btn:hover {
+    background: var(--error);
+    color: white;
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+}
+
+/* 3D Trash Icon Animation */
+.clear-db-icon-container {
+    perspective: 500px;
+    width: 60px;
+    height: 60px;
+    margin: 0 auto 20px;
+    position: relative;
+    transform-style: preserve-3d;
+}
+
+.trash-can {
+    width: 40px;
+    height: 50px;
+    background: linear-gradient(135deg, #ef4444, #b91c1c);
+    border-radius: 0 0 8px 8px;
+    margin: 0 auto;
+    position: relative;
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
+    display: flex;
+    justify-content: center;
+    gap: 6px;
+    padding-top: 10px;
+}
+
+.trash-line {
+    width: 4px;
+    height: 25px;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 2px;
+}
+
+.trash-lid {
+    width: 50px;
+    height: 8px;
+    background: #ef4444;
+    border-radius: 4px;
+    position: absolute;
+    top: -10px;
+    left: 5px;
+    transform-origin: bottom right;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    animation: lidBounce 2s infinite ease-in-out;
+}
+
+.trash-lid::before {
+    content: '';
+    position: absolute;
+    top: -6px;
+    left: 18px;
+    width: 14px;
+    height: 6px;
+    background: #ef4444;
+    border-radius: 3px 3px 0 0;
+}
+
+@keyframes lidBounce {
+
+    0%,
+    100% {
+        transform: rotate(0deg);
+    }
+
+    20% {
+        transform: rotate(-20deg);
+    }
+
+    40% {
+        transform: rotate(0deg);
+    }
+
+    60% {
+        transform: rotate(-10deg);
+    }
+}
+
+/* List Item Removal Animation */
+.slide-out-right {
+    animation: slideOutRight 0.5s cubic-bezier(0.55, 0.085, 0.68, 0.53) forwards;
+}
+
+@keyframes slideOutRight {
+    0% {
+        transform: translateX(0);
+        opacity: 1;
+    }
+
+    100% {
+        transform: translateX(100px);
+        opacity: 0;
+    }
 }

@@ -71,6 +71,20 @@
                     <!-- Docs Drawer -->
                     <div class="docs-drawer" id="docsDrawer">
                         <h3>Processed PDFs</h3>
+                        <div class="drawer-header-actions"
+                            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                            <button id="clearDbBtn" class="clear-db-btn" title="Clear All Data">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
+                                    fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                    stroke-linejoin="round">
+                                    <polyline points="3 6 5 6 21 6"></polyline>
+                                    <path
+                                        d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2">
+                                    </path>
+                                </svg>
+                                Clear DB
+                            </button>
+                        </div>
                         <ul class="documents-list" id="documentsList">
                             <!-- Documents will be added here dynamically -->
                         </ul>
@@ -113,16 +127,16 @@
                     <p class="welcome-subtitle">Transform your PDFs into an interactive knowledge base. Upload multiple
                         documents and get instant, accurate answers using our advanced RAG system.</p>
                 </div>
-
-                <!-- Scroll to Bottom Button -->
-                <button id="scrollTopBtn" class="scroll-btn hidden">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
-                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <line x1="12" y1="5" x2="12" y2="19"></line>
-                        <polyline points="19 12 12 19 5 12"></polyline>
-                    </svg>
-                </button>
             </div>
+
+            <!-- Scroll to Bottom Button (Moved outside chat-messages) -->
+            <button id="scrollTopBtn" class="scroll-btn hidden">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="12" y1="5" x2="12" y2="19"></line>
+                    <polyline points="19 12 12 19 5 12"></polyline>
+                </svg>
+            </button>
 
             <!-- Chat Input -->
             <div class="chat-input-container">
@@ -209,6 +223,36 @@
             <div class="modal-footer">
                 <button class="modal-btn cancel" id="cancelDelete">Cancel</button>
                 <button class="modal-btn danger" id="confirmDelete">Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Clear DB Confirmation Modal (3D) -->
+    <div class="modal-overlay" id="clearDbModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>Clear Database</h3>
+                <button class="modal-close" id="closeClearDbModal">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-body" style="text-align: center;">
+                <div class="clear-db-icon-container">
+                    <div class="trash-lid"></div>
+                    <div class="trash-can">
+                        <div class="trash-line"></div>
+                        <div class="trash-line"></div>
+                    </div>
+                </div>
+                <p>Are you sure? This will <strong>permanently delete</strong> all processed documents and vectors.</p>
+            </div>
+            <div class="modal-footer">
+                <button class="modal-btn cancel" id="cancelClearDb">Cancel</button>
+                <button class="modal-btn danger" id="confirmClearDb">Yes, Clear All</button>
             </div>
         </div>
     </div>

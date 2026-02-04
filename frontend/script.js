@@ -542,6 +542,8 @@ async function askQuestion(question) {
 
         showToast(error.message || 'Failed to get answer', 'error');
     } finally {
+        elements.questionInput.disabled = false;
+        elements.sendBtn.disabled = false;
         elements.questionInput.focus();
     }
 }

@@ -10,6 +10,27 @@ The project now features a **state-of-the-art 3D Glassmorphism UI** for a premiu
 
 ---
 
+## ❓ Problem Statement
+Large Language Models (LLMs) like GPT-4 or Gemini are powerful, but they have significant limitations:
+*   **Hallucinations**: They can confidently generate incorrect information.
+*   **Knowledge Cutoff**: They are unaware of events or data created after their training date.
+*   **No Private Knowledge**: They cannot answer questions about your specific documents, emails, or internal databases.
+
+## 💡 The Solution: RAG Pipeline
+This project bridges the gap using **Retrieval-Augmented Generation (RAG)**. Instead of relying solely on the LLM's pre-trained memory, the system:
+1.  **Ingests** your private PDF documents.
+2.  **Indexes** them into a searchable vector database.
+3.  **Retrieves** the exact context relevant to your question.
+4.  **Generates** an accurate answer based *only* on that context.
+
+## 🚀 Why Use This Project?
+*   **🔒 Complete Privacy**: Everything runs locally (**Ollama + FAISS**). Your sensitive documents never leave your machine.
+*   **✅ Truthful Answers**: The model answers based on your data, significantly reducing hallucinations.
+*   **💰 Zero Cost**: Uses open-source models (Gemma 2) and local compute, avoiding expensive API tokens.
+*   **🎨 Premium UI**: A polished, modern interface that makes interacting with your documents a delight.
+
+---
+
 ## 🚀 Features
 
 -   **🖥️ Modern Web UI**: Premium 3D Glassmorphism design with interactive animations.
@@ -47,11 +68,16 @@ RAG-Pipeline/
 │   ├── simple_rag.py    # Core RAG Logic
 │   ├── vector_store.py  # FAISS Vector Store Management
 │   ├── pdf_reader.py    # PDF Text Extraction
-│   └── ...
-└── frontend/            # Modern Web UI
-    ├── index.html
-    ├── style.css
-    └── script.js
+│   ├── llm_chain.py     # LLM Chain & Prompt Engineering
+│   ├── text_splitter.py # Text Chunking Logic
+│   └── logger.py        # Logging Configuration
+├── frontend/            # Modern Web UI
+│   ├── index.html
+│   ├── style.css
+│   └── script.js
+├── extracted_text/      # Directory for debugging extracted text
+├── uploads/             # Directory for uploaded files
+└── faiss_db/            # Local Vector Store (FAISS)
 ```
 
 ---
@@ -137,6 +163,8 @@ streamlit run app.py
 
 -   ✅ **UI Overhaul**: Implemented Gemini-style input bar and document drawer.
 -   ✅ **Multi-File Support**: Upload and process batches of PDFs.
+-   ✅ **Prompt Engineering**: Enhanced LLM prompt for better table interpretation and data analysis.
+-   ✅ **Raw Text Extraction**: Automatically extracts and saves processed PDF text to `extracted_text/combined.txt` for inspection.
 -   ✅ **Interactive 3D**: Added tilt effects and 3D welcome animations.
 -   ✅ **Performance**: Optimized text chunking and storage.
 

@@ -16,7 +16,7 @@ class SimpleRAG:
         self.embeddings = HuggingFaceEmbeddings(
             model_name="sentence-transformers/all-MiniLM-L6-v2"
         )
-        self.llm = Ollama(model="gemma2:2b")
+        self.llm = Ollama(model="qwen3:1.7b")
         if os.path.exists("faiss_db"):
             logger.info("Loading existing FAISS database")
             self.vector_db = FAISS.load_local(

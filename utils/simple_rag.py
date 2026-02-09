@@ -47,7 +47,7 @@ class SimpleRAG:
         logger.info(f"Received question: {question}")
         retriever = self.vector_db.as_retriever(top_k=5)
 
-        rag_chain = build_llm_chain(self.llm, retriever)
+        rag_chain = build_llm_chain(self.llm, etriever)
         answer = rag_chain.invoke(question)
 
         return answer

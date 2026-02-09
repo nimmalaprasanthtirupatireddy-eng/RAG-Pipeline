@@ -1,1566 +1,795 @@
 
 
-===== FILE: Attention All You Need.pdf =====
+===== File: Attention All You Need.pdf =====
 
-Provided proper attribution is provided, Google hereby grants permission to
-reproduce the tables and figures in this paper solely for use in journalistic or
-scholarly works.
-Attention Is All You Need
-Ashish Vaswani∗
-Google Brain
-avaswani@google.comNoam Shazeer∗
-Google Brain
-noam@google.comNiki Parmar∗
-Google Research
-nikip@google.comJakob Uszkoreit∗
-Google Research
-usz@google.com
-Llion Jones∗
-Google Research
-llion@google.comAidan N. Gomez∗ †
-University of Toronto
-aidan@cs.toronto.eduŁukasz Kaiser∗
-Google Brain
-lukaszkaiser@google.com
+arXiv:1706.03762v7 [cs.CL] 2 Aug 2023
+
+Provided proper attribution is provided, Google hereby grants permission to reproduce the tables and figures in this paper solely for use in journalistic or scholarly works.
+
+# Attention Is All You Need
+
+Ashish Vaswani∗  Noam Shazeer∗        Niki Parmar∗  Jakob Uszkoreit∗
+
+Google Brain         Google Brain     Google Research    Google Research
+
+avaswani@google.com    noam@google.com    nikip@google.com    usz@google.com
+
+Llion Jones∗     Aidan N. Gomez∗ †         Łukasz Kaiser∗
+
+Google Research    University of Toronto          Google Brain
+
+llion@google.com    aidan@cs.toronto.edu    lukaszkaiser@google.com
+
 Illia Polosukhin∗ ‡
+
 illia.polosukhin@gmail.com
-Abstract
-The dominant sequence transduction models are based on complex recurrent or
-convolutional neural networks that include an encoder and a decoder. The best
-performing models also connect the encoder and decoder through an attention
-mechanism. We propose a new simple network architecture, the Transformer,
-based solely on attention mechanisms, dispensing with recurrence and convolutions
-entirely. Experiments on two machine translation tasks show these models to
-be superior in quality while being more parallelizable and requiring significantly
-less time to train. Our model achieves 28.4 BLEU on the WMT 2014 English-
-to-German translation task, improving over the existing best results, including
-ensembles, by over 2 BLEU. On the WMT 2014 English-to-French translation task,
-our model establishes a new single-model state-of-the-art BLEU score of 41.8 after
-training for 3.5 days on eight GPUs, a small fraction of the training costs of the
-best models from the literature. We show that the Transformer generalizes well to
-other tasks by applying it successfully to English constituency parsing both with
-large and limited training data.
-∗Equal contribution. Listing order is random. Jakob proposed replacing RNNs with self-attention and started
-the effort to evaluate this idea. Ashish, with Illia, designed and implemented the first Transformer models and
-has been crucially involved in every aspect of this work. Noam proposed scaled dot-product attention, multi-head
-attention and the parameter-free position representation and became the other person involved in nearly every
-detail. Niki designed, implemented, tuned and evaluated countless model variants in our original codebase and
-tensor2tensor. Llion also experimented with novel model variants, was responsible for our initial codebase, and
-efficient inference and visualizations. Lukasz and Aidan spent countless long days designing various parts of and
-implementing tensor2tensor, replacing our earlier codebase, greatly improving results and massively accelerating
-our research.
+
+# Abstract
+
+The dominant sequence transduction models are based on complex recurrent or convolutional neural networks that include an encoder and a decoder. The best performing models also connect the encoder and decoder through an attention mechanism. We propose a new simple network architecture, the Transformer, based solely on attention mechanisms, dispensing with recurrence and convolutions entirely. Experiments on two machine translation tasks show these models to be superior in quality while being more parallelizable and requiring significantly less time to train. Our model achieves 28.4 BLEU on the WMT 2014 English-to-German translation task, improving over the existing best results, including ensembles, by over 2 BLEU. On the WMT 2014 English-to-French translation task, our model establishes a new single-model state-of-the-art BLEU score of 41.8 after training for 3.5 days on eight GPUs, a small fraction of the training costs of the best models from the literature. We show that the Transformer generalizes well to other tasks by applying it successfully to English constituency parsing both with large and limited training data.
+
+∗Equal contribution. Listing order is random. Jakob proposed replacing RNNs with self-attention and started the effort to evaluate this idea. Ashish, with Illia, designed and implemented the first Transformer models and has been crucially involved in every aspect of this work. Noam proposed scaled dot-product attention, multi-head attention and the parameter-free position representation and became the other person involved in nearly every detail. Niki designed, implemented, tuned and evaluated countless model variants in our original codebase and tensor2tensor. Llion also experimented with novel model variants, was responsible for our initial codebase, and efficient inference and visualizations. Lukasz and Aidan spent countless long days designing various parts of and implementing tensor2tensor, replacing our earlier codebase, greatly improving results and massively accelerating our research.
+
 †Work performed while at Google Brain.
+
 ‡Work performed while at Google Research.
-31st Conference on Neural Information Processing Systems (NIPS 2017), Long Beach, CA, USA.arXiv:1706.03762v7  [cs.CL]  2 Aug 2023
-1 Introduction
-Recurrent neural networks, long short-term memory [ 13] and gated recurrent [ 7] neural networks
-in particular, have been firmly established as state of the art approaches in sequence modeling and
-transduction problems such as language modeling and machine translation [ 35,2,5]. Numerous
-efforts have since continued to push the boundaries of recurrent language models and encoder-decoder
-architectures [38, 24, 15].
-Recurrent models typically factor computation along the symbol positions of the input and output
-sequences. Aligning the positions to steps in computation time, they generate a sequence of hidden
-states ht, as a function of the previous hidden state ht−1and the input for position t. This inherently
-sequential nature precludes parallelization within training examples, which becomes critical at longer
-sequence lengths, as memory constraints limit batching across examples. Recent work has achieved
-significant improvements in computational efficiency through factorization tricks [ 21] and conditional
-computation [ 32], while also improving model performance in case of the latter. The fundamental
-constraint of sequential computation, however, remains.
-Attention mechanisms have become an integral part of compelling sequence modeling and transduc-
-tion models in various tasks, allowing modeling of dependencies without regard to their distance in
-the input or output sequences [ 2,19]. In all but a few cases [ 27], however, such attention mechanisms
-are used in conjunction with a recurrent network.
-In this work we propose the Transformer, a model architecture eschewing recurrence and instead
-relying entirely on an attention mechanism to draw global dependencies between input and output.
-The Transformer allows for significantly more parallelization and can reach a new state of the art in
-translation quality after being trained for as little as twelve hours on eight P100 GPUs.
-2 Background
-The goal of reducing sequential computation also forms the foundation of the Extended Neural GPU
-[16], ByteNet [ 18] and ConvS2S [ 9], all of which use convolutional neural networks as basic building
-block, computing hidden representations in parallel for all input and output positions. In these models,
-the number of operations required to relate signals from two arbitrary input or output positions grows
-in the distance between positions, linearly for ConvS2S and logarithmically for ByteNet. This makes
-it more difficult to learn dependencies between distant positions [ 12]. In the Transformer this is
-reduced to a constant number of operations, albeit at the cost of reduced effective resolution due
-to averaging attention-weighted positions, an effect we counteract with Multi-Head Attention as
-described in section 3.2.
-Self-attention, sometimes called intra-attention is an attention mechanism relating different positions
-of a single sequence in order to compute a representation of the sequence. Self-attention has been
-used successfully in a variety of tasks including reading comprehension, abstractive summarization,
-textual entailment and learning task-independent sentence representations [4, 27, 28, 22].
-End-to-end memory networks are based on a recurrent attention mechanism instead of sequence-
-aligned recurrence and have been shown to perform well on simple-language question answering and
-language modeling tasks [34].
-To the best of our knowledge, however, the Transformer is the first transduction model relying
-entirely on self-attention to compute representations of its input and output without using sequence-
-aligned RNNs or convolution. In the following sections, we will describe the Transformer, motivate
-self-attention and discuss its advantages over models such as [17, 18] and [9].
-3 Model Architecture
-Most competitive neural sequence transduction models have an encoder-decoder structure [ 5,2,35].
-Here, the encoder maps an input sequence of symbol representations (x1, ..., x n)to a sequence
-of continuous representations z= (z1, ..., z n). Given z, the decoder then generates an output
-sequence (y1, ..., y m)of symbols one element at a time. At each step the model is auto-regressive
-[10], consuming the previously generated symbols as additional input when generating the next.
-2
+
+31st Conference on Neural Information Processing Systems (NIPS 2017), Long Beach, CA, USA.
+
+
+
+
+
+
+# 1 Introduction
+
+Recurrent neural networks, long short-term memory [13] and gated recurrent [7] neural networks in particular, have been firmly established as state of the art approaches in sequence modeling and transduction problems such as language modeling and machine translation [35, 2, 5]. Numerous efforts have since continued to push the boundaries of recurrent language models and encoder-decoder architectures [38, 24, 15].
+
+Recurrent models typically factor computation along the symbol positions of the input and output sequences. Aligning the positions to steps in computation time, they generate a sequence of hidden states ht, as a function of the previous hidden state ht−1 and the input for position t. This inherently sequential nature precludes parallelization within training examples, which becomes critical at longer sequence lengths, as memory constraints limit batching across examples. Recent work has achieved significant improvements in computational efficiency through factorization tricks [21] and conditional computation [32], while also improving model performance in case of the latter. The fundamental constraint of sequential computation, however, remains.
+
+Attention mechanisms have become an integral part of compelling sequence modeling and transduction models in various tasks, allowing modeling of dependencies without regard to their distance in the input or output sequences [2, 19]. In all but a few cases [27], however, such attention mechanisms are used in conjunction with a recurrent network.
+
+In this work we propose the Transformer, a model architecture eschewing recurrence and instead relying entirely on an attention mechanism to draw global dependencies between input and output. The Transformer allows for significantly more parallelization and can reach a new state of the art in translation quality after being trained for as little as twelve hours on eight P100 GPUs.
+
+# 2 Background
+
+The goal of reducing sequential computation also forms the foundation of the Extended Neural GPU [16], ByteNet [18] and ConvS2S [9], all of which use convolutional neural networks as basic building block, computing hidden representations in parallel for all input and output positions. In these models, the number of operations required to relate signals from two arbitrary input or output positions grows in the distance between positions, linearly for ConvS2S and logarithmically for ByteNet. This makes it more difficult to learn dependencies between distant positions [12]. In the Transformer this is reduced to a constant number of operations, albeit at the cost of reduced effective resolution due to averaging attention-weighted positions, an effect we counteract with Multi-Head Attention as described in section 3.2.
+
+Self-attention, sometimes called intra-attention is an attention mechanism relating different positions of a single sequence in order to compute a representation of the sequence. Self-attention has been used successfully in a variety of tasks including reading comprehension, abstractive summarization, textual entailment and learning task-independent sentence representations [4, 27, 28, 22].
+
+End-to-end memory networks are based on a recurrent attention mechanism instead of sequence-aligned recurrence and have been shown to perform well on simple-language question answering and language modeling tasks [34].
+
+To the best of our knowledge, however, the Transformer is the first transduction model relying entirely on self-attention to compute representations of its input and output without using sequence-aligned RNNs or convolution. In the following sections, we will describe the Transformer, motivate self-attention and discuss its advantages over models such as [17, 18] and [9].
+
+# 3 Model Architecture
+
+Most competitive neural sequence transduction models have an encoder-decoder structure [5, 2, 35]. Here, the encoder maps an input sequence of symbol representations (x1, ..., xn) to a sequence of continuous representations z = (z1, ..., zn). Given z, the decoder then generates an output sequence (y1, ..., ym) of symbols one element at a time. At each step the model is auto-regressive [10], consuming the previously generated symbols as additional input when generating the next.
+
+
+
+
+
+
+# 2020
+
 Figure 1: The Transformer - model architecture.
-The Transformer follows this overall architecture using stacked self-attention and point-wise, fully
-connected layers for both the encoder and decoder, shown in the left and right halves of Figure 1,
-respectively.
-3.1 Encoder and Decoder Stacks
-Encoder: The encoder is composed of a stack of N= 6 identical layers. Each layer has two
-sub-layers. The first is a multi-head self-attention mechanism, and the second is a simple, position-
-wise fully connected feed-forward network. We employ a residual connection [ 11] around each of
-the two sub-layers, followed by layer normalization [ 1]. That is, the output of each sub-layer is
-LayerNorm( x+ Sublayer( x)), where Sublayer( x)is the function implemented by the sub-layer
-itself. To facilitate these residual connections, all sub-layers in the model, as well as the embedding
-layers, produce outputs of dimension dmodel = 512 .
-Decoder: The decoder is also composed of a stack of N= 6identical layers. In addition to the two
-sub-layers in each encoder layer, the decoder inserts a third sub-layer, which performs multi-head
-attention over the output of the encoder stack. Similar to the encoder, we employ residual connections
-around each of the sub-layers, followed by layer normalization. We also modify the self-attention
-sub-layer in the decoder stack to prevent positions from attending to subsequent positions. This
-masking, combined with fact that the output embeddings are offset by one position, ensures that the
-predictions for position ican depend only on the known outputs at positions less than i.
-3.2 Attention
-An attention function can be described as mapping a query and a set of key-value pairs to an output,
-where the query, keys, values, and output are all vectors. The output is computed as a weighted sum
-3
-Scaled Dot-Product Attention
- Multi-Head Attention
-Figure 2: (left) Scaled Dot-Product Attention. (right) Multi-Head Attention consists of several
-attention layers running in parallel.
-of the values, where the weight assigned to each value is computed by a compatibility function of the
-query with the corresponding key.
-3.2.1 Scaled Dot-Product Attention
-We call our particular attention "Scaled Dot-Product Attention" (Figure 2). The input consists of
-queries and keys of dimension dk, and values of dimension dv. We compute the dot products of the
-query with all keys, divide each by√dk, and apply a softmax function to obtain the weights on the
-values.
-In practice, we compute the attention function on a set of queries simultaneously, packed together
-into a matrix Q. The keys and values are also packed together into matrices KandV. We compute
-the matrix of outputs as:
-Attention( Q, K, V ) = softmax(QKT
-√dk)V (1)
-The two most commonly used attention functions are additive attention [ 2], and dot-product (multi-
-plicative) attention. Dot-product attention is identical to our algorithm, except for the scaling factor
-of1√dk. Additive attention computes the compatibility function using a feed-forward network with
-a single hidden layer. While the two are similar in theoretical complexity, dot-product attention is
-much faster and more space-efficient in practice, since it can be implemented using highly optimized
-matrix multiplication code.
-While for small values of dkthe two mechanisms perform similarly, additive attention outperforms
-dot product attention without scaling for larger values of dk[3]. We suspect that for large values of
-dk, the dot products grow large in magnitude, pushing the softmax function into regions where it has
-extremely small gradients4. To counteract this effect, we scale the dot products by1√dk.
-3.2.2 Multi-Head Attention
-Instead of performing a single attention function with dmodel-dimensional keys, values and queries,
-we found it beneficial to linearly project the queries, keys and values htimes with different, learned
-linear projections to dk,dkanddvdimensions, respectively. On each of these projected versions of
-queries, keys and values we then perform the attention function in parallel, yielding dv-dimensional
-4To illustrate why the dot products get large, assume that the components of qandkare independent random
-variables with mean 0and variance 1. Then their dot product, q·k=Pdk
-i=1qiki, has mean 0and variance dk.
-4
-output values. These are concatenated and once again projected, resulting in the final values, as
-depicted in Figure 2.
-Multi-head attention allows the model to jointly attend to information from different representation
-subspaces at different positions. With a single attention head, averaging inhibits this.
-MultiHead( Q, K, V ) = Concat(head 1, ...,head h)WO
-where head i= Attention( QWQ
-i, KWK
-i, V WV
-i)
-Where the projections are parameter matrices WQ
-i∈Rdmodel×dk,WK
-i∈Rdmodel×dk,WV
-i∈Rdmodel×dv
-andWO∈Rhdv×dmodel.
-In this work we employ h= 8 parallel attention layers, or heads. For each of these we use
-dk=dv=dmodel/h= 64 . Due to the reduced dimension of each head, the total computational cost
-is similar to that of single-head attention with full dimensionality.
-3.2.3 Applications of Attention in our Model
+
+The Transformer follows this overall architecture using stacked self-attention and point-wise, fully connected layers for both the encoder and decoder, shown in the left and right halves of Figure 1, respectively.
+
+# 3.1 Encoder and Decoder Stacks
+
+# Encoder:
+
+The encoder is composed of a stack of N = 6 identical layers. Each layer has two sub-layers. The first is a multi-head self-attention mechanism, and the second is a simple, position-wise fully connected feed-forward network. We employ a residual connection [11] around each of the two sub-layers, followed by layer normalization [1]. That is, the output of each sub-layer is LayerNorm(x + Sublayer(x)), where Sublayer(x) is the function implemented by the sub-layer itself. To facilitate these residual connections, all sub-layers in the model, as well as the embedding layers, produce outputs of dimension dmodel = 512.
+
+# Decoder:
+
+The decoder is also composed of a stack of N = 6 identical layers. In addition to the two sub-layers in each encoder layer, the decoder inserts a third sub-layer, which performs multi-head attention over the output of the encoder stack. Similar to the encoder, we employ residual connections around each of the sub-layers, followed by layer normalization. We also modify the self-attention sub-layer in the decoder stack to prevent positions from attending to subsequent positions. This masking, combined with the fact that the output embeddings are offset by one position, ensures that the predictions for position i can depend only on the known outputs at positions less than i.
+
+# 3.2 Attention
+
+An attention function can be described as mapping a query and a set of key-value pairs to an output, where the query, keys, values, and output are all vectors. The output is computed as a weighted sum
+
+
+
+
+
+
+# Scaled Dot-Product Attention
+
+# Multi-Head Attention
+
+| Linear      | MatMul             | SoftMax | Concat |
+| ----------- | ------------------ | ------- | ------ |
+| Mask (opt.) | Scaled Dot-Product |         |        |
+| Scale       |                    |         |        |
+| MatMul      | Linear             | Linear  | Linear |
+| ↑           | ↑                  |         |        |
+| Q           | K                  |         |        |
+
+Figure 2: (left) Scaled Dot-Product Attention. (right) Multi-Head Attention consists of several attention layers running in parallel.
+
+of the values, where the weight assigned to each value is computed by a compatibility function of the query with the corresponding key.
+
+# 3.2.1 Scaled Dot-Product Attention
+
+We call our particular attention "Scaled Dot-Product Attention" (Figure 2). The input consists of queries and keys of dimension d, and values of dimension d. We compute the dot products of the query with all keys, divide each by √dk, and apply a softmax function to obtain the weights on the values. In practice, we compute the attention function on a set of queries simultaneously, packed together into a matrix Q. The keys and values are also packed together into matrices K and V. We compute the matrix of outputs as:
+
+Attention(Q, K, V) = softmax(QKT / √dk)V (1)
+
+The two most commonly used attention functions are additive attention [2], and dot-product (multiplicative) attention. Dot-product attention is identical to our algorithm, except for the scaling factor of 1 / √dk. Additive attention computes the compatibility function using a feed-forward network with a single hidden layer. While the two are similar in theoretical complexity, dot-product attention is much faster and more space-efficient in practice, since it can be implemented using highly optimized matrix multiplication code.
+
+While for small values of dk the two mechanisms perform similarly, additive attention outperforms dot product attention without scaling for larger values of dk [3]. We suspect that for large values of dk, the dot products grow large in magnitude, pushing the softmax function into regions where it has extremely small gradients. To counteract this effect, we scale the dot products by 1 / √dk.
+
+# 3.2.2 Multi-Head Attention
+
+Instead of performing a single attention function with dmodel-dimensional keys, values and queries, we found it beneficial to linearly project the queries, keys and values h times with different, learned linear projections to dk, dk and dv dimensions, respectively. On each of these projected versions of queries, keys and values we then perform the attention function in parallel, yielding dv-dimensional.
+
+To illustrate why the dot products get large, assume that the components of q and k are independent random variables with mean 0 and variance 1. Then their dot product, q · k = Σi=1dk qiki, has mean 0 and variance dk.
+
+
+
+
+
+
+output values. These are concatenated and once again projected, resulting in the final values, as depicted in Figure 2.
+
+Multi-head attention allows the model to jointly attend to information from different representation subspaces at different positions. With a single attention head, averaging inhibits this.
+
+MultiHead(Q, K, V ) = Concat(head1, ..., headh)WO
+
+where headi = Attention(QWQ, KWK, V WV)
+
+Where the projections are parameter matrices WQ ∈ Rdmodel×dk, WK ∈ Rdmodel×dk, WV ∈ Rdmodel×dv and WO ∈ Rh dv×dmodel.
+
+In this work we employ h = 8 parallel attention layers, or heads. For each of these we use dk = dv = dmodel/h = 64. Due to the reduced dimension of each head, the total computational cost is similar to that of single-head attention with full dimensionality.
+
+# 3.2.3  Applications of Attention in our Model
+
 The Transformer uses multi-head attention in three different ways:
-•In "encoder-decoder attention" layers, the queries come from the previous decoder layer,
-and the memory keys and values come from the output of the encoder. This allows every
-position in the decoder to attend over all positions in the input sequence. This mimics the
-typical encoder-decoder attention mechanisms in sequence-to-sequence models such as
-[38, 2, 9].
-•The encoder contains self-attention layers. In a self-attention layer all of the keys, values
-and queries come from the same place, in this case, the output of the previous layer in the
-encoder. Each position in the encoder can attend to all positions in the previous layer of the
-encoder.
-•Similarly, self-attention layers in the decoder allow each position in the decoder to attend to
-all positions in the decoder up to and including that position. We need to prevent leftward
-information flow in the decoder to preserve the auto-regressive property. We implement this
-inside of scaled dot-product attention by masking out (setting to −∞) all values in the input
-of the softmax which correspond to illegal connections. See Figure 2.
-3.3 Position-wise Feed-Forward Networks
-In addition to attention sub-layers, each of the layers in our encoder and decoder contains a fully
-connected feed-forward network, which is applied to each position separately and identically. This
-consists of two linear transformations with a ReLU activation in between.
-FFN( x) = max(0 , xW 1+b1)W2+b2 (2)
-While the linear transformations are the same across different positions, they use different parameters
-from layer to layer. Another way of describing this is as two convolutions with kernel size 1.
-The dimensionality of input and output is dmodel = 512 , and the inner-layer has dimensionality
-dff= 2048 .
-3.4 Embeddings and Softmax
-Similarly to other sequence transduction models, we use learned embeddings to convert the input
-tokens and output tokens to vectors of dimension dmodel. We also use the usual learned linear transfor-
-mation and softmax function to convert the decoder output to predicted next-token probabilities. In
-our model, we share the same weight matrix between the two embedding layers and the pre-softmax
-linear transformation, similar to [ 30]. In the embedding layers, we multiply those weights by√dmodel.
-5
-Table 1: Maximum path lengths, per-layer complexity and minimum number of sequential operations
-for different layer types. nis the sequence length, dis the representation dimension, kis the kernel
-size of convolutions and rthe size of the neighborhood in restricted self-attention.
-Layer Type Complexity per Layer Sequential Maximum Path Length
-Operations
-Self-Attention O(n2·d) O(1) O(1)
-Recurrent O(n·d2) O(n) O(n)
-Convolutional O(k·n·d2) O(1) O(logk(n))
-Self-Attention (restricted) O(r·n·d) O(1) O(n/r)
-3.5 Positional Encoding
-Since our model contains no recurrence and no convolution, in order for the model to make use of the
-order of the sequence, we must inject some information about the relative or absolute position of the
-tokens in the sequence. To this end, we add "positional encodings" to the input embeddings at the
-bottoms of the encoder and decoder stacks. The positional encodings have the same dimension dmodel
-as the embeddings, so that the two can be summed. There are many choices of positional encodings,
-learned and fixed [9].
+
+- In "encoder-decoder attention" layers, the queries come from the previous decoder layer, and the memory keys and values come from the output of the encoder. This allows every position in the decoder to attend over all positions in the input sequence. This mimics the typical encoder-decoder attention mechanisms in sequence-to-sequence models such as [38, 2, 9].
+- The encoder contains self-attention layers. In a self-attention layer all of the keys, values and queries come from the same place, in this case, the output of the previous layer in the encoder. Each position in the encoder can attend to all positions in the previous layer of the encoder.
+- Similarly, self-attention layers in the decoder allow each position in the decoder to attend to all positions in the decoder up to and including that position. We need to prevent leftward information flow in the decoder to preserve the auto-regressive property. We implement this inside of scaled dot-product attention by masking out (setting to −∞) all values in the input of the softmax which correspond to illegal connections. See Figure 2.
+
+# 3.3    Position-wise Feed-Forward Networks
+
+In addition to attention sub-layers, each of the layers in our encoder and decoder contains a fully connected feed-forward network, which is applied to each position separately and identically. This consists of two linear transformations with a ReLU activation in between.
+
+FFN(x) = max(0, xW1 + b1)W2 + b2
+
+While the linear transformations are the same across different positions, they use different parameters from layer to layer. Another way of describing this is as two convolutions with kernel size 1. The dimensionality of input and output is dmodel = 512, and the inner-layer has dimensionality df f = 2048.
+
+# 3.4    Embeddings and Softmax
+
+Similarly to other sequence transduction models, we use learned embeddings to convert the input tokens and output tokens to vectors of dimension dmodel. We also use the usual learned linear transformation and softmax function to convert the decoder output to predicted next-token probabilities. In our model, we share the same weight matrix between the two embedding layers and the pre-softmax linear transformation, similar to [30]. In the embedding layers, we multiply those weights by √dmodel.
+
+
+
+
+
+
+# Table 1: Maximum path lengths, per-layer complexity and minimum number of sequential operations for different layer types. n is the sequence length, d is the representation dimension, k is the kernel size of convolutions and r the size of the neighborhood in restricted self-attention.
+
+| Layer Type                  | Complexity per Layer | Sequential Operations | Maximum Path Length |
+| --------------------------- | -------------------- | --------------------- | ------------------- |
+| Self-Attention              | O(n2 · d)            | O(1)                  | O(1)                |
+| Recurrent                   | O(n · d2)            | O(n)                  | O(n)                |
+| Convolutional               | O(k · n · d2)        | O(1)                  | O(logk(n))          |
+| Self-Attention (restricted) | O(r · n · d)         | O(1)                  | O(n/r)              |
+
+# 3.5 Positional Encoding
+
+Since our model contains no recurrence and no convolution, in order for the model to make use of the order of the sequence, we must inject some information about the relative or absolute position of the tokens in the sequence. To this end, we add "positional encodings" to the input embeddings at the bottoms of the encoder and decoder stacks. The positional encodings have the same dimension dmodel as the embeddings, so that the two can be summed. There are many choices of positional encodings, learned and fixed [9].
+
 In this work, we use sine and cosine functions of different frequencies:
-PE(pos,2i)=sin(pos/100002i/d model)
-PE(pos,2i+1)=cos(pos/100002i/d model)
-where posis the position and iis the dimension. That is, each dimension of the positional encoding
-corresponds to a sinusoid. The wavelengths form a geometric progression from 2πto10000 ·2π. We
-chose this function because we hypothesized it would allow the model to easily learn to attend by
-relative positions, since for any fixed offset k,PEpos+kcan be represented as a linear function of
-PEpos.
-We also experimented with using learned positional embeddings [ 9] instead, and found that the two
-versions produced nearly identical results (see Table 3 row (E)). We chose the sinusoidal version
-because it may allow the model to extrapolate to sequence lengths longer than the ones encountered
-during training.
-4 Why Self-Attention
-In this section we compare various aspects of self-attention layers to the recurrent and convolu-
-tional layers commonly used for mapping one variable-length sequence of symbol representations
-(x1, ..., x n)to another sequence of equal length (z1, ..., z n), with xi, zi∈Rd, such as a hidden
-layer in a typical sequence transduction encoder or decoder. Motivating our use of self-attention we
-consider three desiderata.
-One is the total computational complexity per layer. Another is the amount of computation that can
-be parallelized, as measured by the minimum number of sequential operations required.
-The third is the path length between long-range dependencies in the network. Learning long-range
-dependencies is a key challenge in many sequence transduction tasks. One key factor affecting the
-ability to learn such dependencies is the length of the paths forward and backward signals have to
-traverse in the network. The shorter these paths between any combination of positions in the input
-and output sequences, the easier it is to learn long-range dependencies [ 12]. Hence we also compare
-the maximum path length between any two input and output positions in networks composed of the
-different layer types.
-As noted in Table 1, a self-attention layer connects all positions with a constant number of sequentially
-executed operations, whereas a recurrent layer requires O(n)sequential operations. In terms of
-computational complexity, self-attention layers are faster than recurrent layers when the sequence
-6
-length nis smaller than the representation dimensionality d, which is most often the case with
-sentence representations used by state-of-the-art models in machine translations, such as word-piece
-[38] and byte-pair [ 31] representations. To improve computational performance for tasks involving
-very long sequences, self-attention could be restricted to considering only a neighborhood of size rin
-the input sequence centered around the respective output position. This would increase the maximum
-path length to O(n/r). We plan to investigate this approach further in future work.
-A single convolutional layer with kernel width k < n does not connect all pairs of input and output
-positions. Doing so requires a stack of O(n/k)convolutional layers in the case of contiguous kernels,
-orO(logk(n))in the case of dilated convolutions [ 18], increasing the length of the longest paths
-between any two positions in the network. Convolutional layers are generally more expensive than
-recurrent layers, by a factor of k. Separable convolutions [ 6], however, decrease the complexity
-considerably, to O(k·n·d+n·d2). Even with k=n, however, the complexity of a separable
-convolution is equal to the combination of a self-attention layer and a point-wise feed-forward layer,
-the approach we take in our model.
-As side benefit, self-attention could yield more interpretable models. We inspect attention distributions
-from our models and present and discuss examples in the appendix. Not only do individual attention
-heads clearly learn to perform different tasks, many appear to exhibit behavior related to the syntactic
-and semantic structure of the sentences.
-5 Training
+
+P E(pos,2i) = sin(pos/100002i/dmodel)
+
+P E(pos,2i+1) = cos(pos/100002i/dmodel)
+
+where pos is the position and i is the dimension. That is, each dimension of the positional encoding corresponds to a sinusoid. The wavelengths form a geometric progression from 2π to 10000 · 2π. We chose this function because we hypothesized it would allow the model to easily learn to attend by relative positions, since for any fixed offset k, P Epos+k can be represented as a linear function of P Epos.
+
+We also experimented with using learned positional embeddings [9] instead, and found that the two versions produced nearly identical results (see Table 3 row (E)). We chose the sinusoidal version because it may allow the model to extrapolate to sequence lengths longer than the ones encountered during training.
+
+# 4 Why Self-Attention
+
+In this section we compare various aspects of self-attention layers to the recurrent and convolutional layers commonly used for mapping one variable-length sequence of symbol representations (x1, ..., xn) to another sequence of equal length (z1, ..., zn), with xi, zi ∈ Rd, such as a hidden layer in a typical sequence transduction encoder or decoder. Motivating our use of self-attention we consider three desiderata.
+
+One is the total computational complexity per layer. Another is the amount of computation that can be parallelized, as measured by the minimum number of sequential operations required. The third is the path length between long-range dependencies in the network. Learning long-range dependencies is a key challenge in many sequence transduction tasks. One key factor affecting the ability to learn such dependencies is the length of the paths forward and backward signals have to traverse in the network. The shorter these paths between any combination of positions in the input and output sequences, the easier it is to learn long-range dependencies [12]. Hence we also compare the maximum path length between any two input and output positions in networks composed of the different layer types.
+
+As noted in Table 1, a self-attention layer connects all positions with a constant number of sequentially executed operations, whereas a recurrent layer requires O(n) sequential operations. In terms of computational complexity, self-attention layers are faster than recurrent layers when the sequence
+
+
+
+
+
+
+
+length n is smaller than the representation dimensionality d, which is most often the case with sentence representations used by state-of-the-art models in machine translations, such as word-piece [38] and byte-pair [31] representations. To improve computational performance for tasks involving very long sequences, self-attention could be restricted to considering only a neighborhood of size r in the input sequence centered around the respective output position. This would increase the maximum path length to O(n/r). We plan to investigate this approach further in future work.
+
+A single convolutional layer with kernel width k &#x3C; n does not connect all pairs of input and output positions. Doing so requires a stack of O(n/k) convolutional layers in the case of contiguous kernels, or O(logk(n)) in the case of dilated convolutions [18], increasing the length of the longest paths between any two positions in the network. Convolutional layers are generally more expensive than recurrent layers, by a factor of k. Separable convolutions [6], however, decrease the complexity considerably, to O(k · n · d + n · d2). Even with k = n, however, the complexity of a separable convolution is equal to the combination of a self-attention layer and a point-wise feed-forward layer, the approach we take in our model.
+
+As side benefit, self-attention could yield more interpretable models. We inspect attention distributions from our models and present and discuss examples in the appendix. Not only do individual attention heads clearly learn to perform different tasks, many appear to exhibit behavior related to the syntactic and semantic structure of the sentences.
+
+# 5 Training
+
 This section describes the training regime for our models.
-5.1 Training Data and Batching
-We trained on the standard WMT 2014 English-German dataset consisting of about 4.5 million
-sentence pairs. Sentences were encoded using byte-pair encoding [ 3], which has a shared source-
-target vocabulary of about 37000 tokens. For English-French, we used the significantly larger WMT
-2014 English-French dataset consisting of 36M sentences and split tokens into a 32000 word-piece
-vocabulary [ 38]. Sentence pairs were batched together by approximate sequence length. Each training
-batch contained a set of sentence pairs containing approximately 25000 source tokens and 25000
-target tokens.
-5.2 Hardware and Schedule
-We trained our models on one machine with 8 NVIDIA P100 GPUs. For our base models using
-the hyperparameters described throughout the paper, each training step took about 0.4 seconds. We
-trained the base models for a total of 100,000 steps or 12 hours. For our big models,(described on the
-bottom line of table 3), step time was 1.0 seconds. The big models were trained for 300,000 steps
-(3.5 days).
-5.3 Optimizer
-We used the Adam optimizer [ 20] with β1= 0.9,β2= 0.98andϵ= 10−9. We varied the learning
-rate over the course of training, according to the formula:
-lrate =d−0.5
-model·min(step_num−0.5, step _num·warmup _steps−1.5) (3)
-This corresponds to increasing the learning rate linearly for the first warmup _steps training steps,
-and decreasing it thereafter proportionally to the inverse square root of the step number. We used
-warmup _steps = 4000 .
-5.4 Regularization
+
+# 5.1 Training Data and Batching
+
+We trained on the standard WMT 2014 English-German dataset consisting of about 4.5 million sentence pairs. Sentences were encoded using byte-pair encoding [3], which has a shared source-target vocabulary of about 37000 tokens. For English-French, we used the significantly larger WMT 2014 English-French dataset consisting of 36M sentences and split tokens into a 32000 word-piece vocabulary [38]. Sentence pairs were batched together by approximate sequence length. Each training batch contained a set of sentence pairs containing approximately 25000 source tokens and 25000 target tokens.
+
+# 5.2 Hardware and Schedule
+
+We trained our models on one machine with 8 NVIDIA P100 GPUs. For our base models using the hyperparameters described throughout the paper, each training step took about 0.4 seconds. We trained the base models for a total of 100,000 steps or 12 hours. For our big models, (described on the bottom line of table 3), step time was 1.0 seconds. The big models were trained for 300,000 steps (3.5 days).
+
+# 5.3 Optimizer
+
+We used the Adam optimizer [20] with β1 = 0.9, β2 = 0.98 and ϵ = 10−9. We varied the learning rate over the course of training, according to the formula:
+
+lrate = d−0.5 · min(step_num−0.5, step_num · warmup_steps−1.5)       (3)
+model
+
+This corresponds to increasing the learning rate linearly for the first warmup_steps training steps, and decreasing it thereafter proportionally to the inverse square root of the step number. We used warmup_steps = 4000.
+
+# 5.4 Regularization
+
 We employ three types of regularization during training:
-7
-Table 2: The Transformer achieves better BLEU scores than previous state-of-the-art models on the
-English-to-German and English-to-French newstest2014 tests at a fraction of the training cost.
-ModelBLEU Training Cost (FLOPs)
-EN-DE EN-FR EN-DE EN-FR
-ByteNet [18] 23.75
-Deep-Att + PosUnk [39] 39.2 1.0·1020
-GNMT + RL [38] 24.6 39.92 2.3·10191.4·1020
-ConvS2S [9] 25.16 40.46 9.6·10181.5·1020
-MoE [32] 26.03 40.56 2.0·10191.2·1020
-Deep-Att + PosUnk Ensemble [39] 40.4 8.0·1020
-GNMT + RL Ensemble [38] 26.30 41.16 1.8·10201.1·1021
-ConvS2S Ensemble [9] 26.36 41.29 7.7·10191.2·1021
-Transformer (base model) 27.3 38.1 3.3·1018
-Transformer (big) 28.4 41.8 2.3·1019
-Residual Dropout We apply dropout [ 33] to the output of each sub-layer, before it is added to the
-sub-layer input and normalized. In addition, we apply dropout to the sums of the embeddings and the
-positional encodings in both the encoder and decoder stacks. For the base model, we use a rate of
-Pdrop= 0.1.
-Label Smoothing During training, we employed label smoothing of value ϵls= 0.1[36]. This
-hurts perplexity, as the model learns to be more unsure, but improves accuracy and BLEU score.
-6 Results
-6.1 Machine Translation
-On the WMT 2014 English-to-German translation task, the big transformer model (Transformer (big)
-in Table 2) outperforms the best previously reported models (including ensembles) by more than 2.0
-BLEU, establishing a new state-of-the-art BLEU score of 28.4. The configuration of this model is
-listed in the bottom line of Table 3. Training took 3.5days on 8P100 GPUs. Even our base model
-surpasses all previously published models and ensembles, at a fraction of the training cost of any of
-the competitive models.
-On the WMT 2014 English-to-French translation task, our big model achieves a BLEU score of 41.0,
-outperforming all of the previously published single models, at less than 1/4the training cost of the
-previous state-of-the-art model. The Transformer (big) model trained for English-to-French used
-dropout rate Pdrop= 0.1, instead of 0.3.
-For the base models, we used a single model obtained by averaging the last 5 checkpoints, which
-were written at 10-minute intervals. For the big models, we averaged the last 20 checkpoints. We
-used beam search with a beam size of 4and length penalty α= 0.6[38]. These hyperparameters
-were chosen after experimentation on the development set. We set the maximum output length during
-inference to input length + 50, but terminate early when possible [38].
-Table 2 summarizes our results and compares our translation quality and training costs to other model
-architectures from the literature. We estimate the number of floating point operations used to train a
-model by multiplying the training time, the number of GPUs used, and an estimate of the sustained
-single-precision floating-point capacity of each GPU5.
-6.2 Model Variations
-To evaluate the importance of different components of the Transformer, we varied our base model
-in different ways, measuring the change in performance on English-to-German translation on the
-5We used values of 2.8, 3.7, 6.0 and 9.5 TFLOPS for K80, K40, M40 and P100, respectively.
-8
-Table 3: Variations on the Transformer architecture. Unlisted values are identical to those of the base
-model. All metrics are on the English-to-German translation development set, newstest2013. Listed
-perplexities are per-wordpiece, according to our byte-pair encoding, and should not be compared to
-per-word perplexities.
-N d model dff h d k dvPdrop ϵlstrain PPL BLEU params
-steps (dev) (dev) ×106
-base 6 512 2048 8 64 64 0.1 0.1 100K 4.92 25.8 65
-(A)1 512 512 5.29 24.9
-4 128 128 5.00 25.5
-16 32 32 4.91 25.8
-32 16 16 5.01 25.4
-(B)16 5.16 25.1 58
-32 5.01 25.4 60
-(C)2 6.11 23.7 36
-4 5.19 25.3 50
-8 4.88 25.5 80
-256 32 32 5.75 24.5 28
-1024 128 128 4.66 26.0 168
-1024 5.12 25.4 53
-4096 4.75 26.2 90
-(D)0.0 5.77 24.6
-0.2 4.95 25.5
-0.0 4.67 25.3
-0.2 5.47 25.7
-(E) positional embedding instead of sinusoids 4.92 25.7
-big 6 1024 4096 16 0.3 300K 4.33 26.4 213
-development set, newstest2013. We used beam search as described in the previous section, but no
-checkpoint averaging. We present these results in Table 3.
-In Table 3 rows (A), we vary the number of attention heads and the attention key and value dimensions,
-keeping the amount of computation constant, as described in Section 3.2.2. While single-head
-attention is 0.9 BLEU worse than the best setting, quality also drops off with too many heads.
-In Table 3 rows (B), we observe that reducing the attention key size dkhurts model quality. This
-suggests that determining compatibility is not easy and that a more sophisticated compatibility
-function than dot product may be beneficial. We further observe in rows (C) and (D) that, as expected,
-bigger models are better, and dropout is very helpful in avoiding over-fitting. In row (E) we replace our
-sinusoidal positional encoding with learned positional embeddings [ 9], and observe nearly identical
-results to the base model.
-6.3 English Constituency Parsing
-To evaluate if the Transformer can generalize to other tasks we performed experiments on English
-constituency parsing. This task presents specific challenges: the output is subject to strong structural
-constraints and is significantly longer than the input. Furthermore, RNN sequence-to-sequence
-models have not been able to attain state-of-the-art results in small-data regimes [37].
-We trained a 4-layer transformer with dmodel = 1024 on the Wall Street Journal (WSJ) portion of the
-Penn Treebank [ 25], about 40K training sentences. We also trained it in a semi-supervised setting,
-using the larger high-confidence and BerkleyParser corpora from with approximately 17M sentences
-[37]. We used a vocabulary of 16K tokens for the WSJ only setting and a vocabulary of 32K tokens
-for the semi-supervised setting.
-We performed only a small number of experiments to select the dropout, both attention and residual
-(section 5.4), learning rates and beam size on the Section 22 development set, all other parameters
-remained unchanged from the English-to-German base translation model. During inference, we
-9
-Table 4: The Transformer generalizes well to English constituency parsing (Results are on Section 23
-of WSJ)
-Parser Training WSJ 23 F1
-Vinyals & Kaiser el al. (2014) [37] WSJ only, discriminative 88.3
-Petrov et al. (2006) [29] WSJ only, discriminative 90.4
-Zhu et al. (2013) [40] WSJ only, discriminative 90.4
-Dyer et al. (2016) [8] WSJ only, discriminative 91.7
-Transformer (4 layers) WSJ only, discriminative 91.3
-Zhu et al. (2013) [40] semi-supervised 91.3
-Huang & Harper (2009) [14] semi-supervised 91.3
-McClosky et al. (2006) [26] semi-supervised 92.1
-Vinyals & Kaiser el al. (2014) [37] semi-supervised 92.1
-Transformer (4 layers) semi-supervised 92.7
-Luong et al. (2015) [23] multi-task 93.0
-Dyer et al. (2016) [8] generative 93.3
-increased the maximum output length to input length + 300. We used a beam size of 21andα= 0.3
-for both WSJ only and the semi-supervised setting.
-Our results in Table 4 show that despite the lack of task-specific tuning our model performs sur-
-prisingly well, yielding better results than all previously reported models with the exception of the
-Recurrent Neural Network Grammar [8].
-In contrast to RNN sequence-to-sequence models [ 37], the Transformer outperforms the Berkeley-
-Parser [29] even when training only on the WSJ training set of 40K sentences.
-7 Conclusion
-In this work, we presented the Transformer, the first sequence transduction model based entirely on
-attention, replacing the recurrent layers most commonly used in encoder-decoder architectures with
-multi-headed self-attention.
-For translation tasks, the Transformer can be trained significantly faster than architectures based
-on recurrent or convolutional layers. On both WMT 2014 English-to-German and WMT 2014
-English-to-French translation tasks, we achieve a new state of the art. In the former task our best
-model outperforms even all previously reported ensembles.
-We are excited about the future of attention-based models and plan to apply them to other tasks. We
-plan to extend the Transformer to problems involving input and output modalities other than text and
-to investigate local, restricted attention mechanisms to efficiently handle large inputs and outputs
-such as images, audio and video. Making generation less sequential is another research goals of ours.
-The code we used to train and evaluate our models is available at https://github.com/
-tensorflow/tensor2tensor .
-Acknowledgements We are grateful to Nal Kalchbrenner and Stephan Gouws for their fruitful
-comments, corrections and inspiration.
-References
-[1]Jimmy Lei Ba, Jamie Ryan Kiros, and Geoffrey E Hinton. Layer normalization. arXiv preprint
-arXiv:1607.06450 , 2016.
-[2]Dzmitry Bahdanau, Kyunghyun Cho, and Yoshua Bengio. Neural machine translation by jointly
-learning to align and translate. CoRR , abs/1409.0473, 2014.
-[3]Denny Britz, Anna Goldie, Minh-Thang Luong, and Quoc V . Le. Massive exploration of neural
-machine translation architectures. CoRR , abs/1703.03906, 2017.
-[4]Jianpeng Cheng, Li Dong, and Mirella Lapata. Long short-term memory-networks for machine
-reading. arXiv preprint arXiv:1601.06733 , 2016.
-10
-[5]Kyunghyun Cho, Bart van Merrienboer, Caglar Gulcehre, Fethi Bougares, Holger Schwenk,
-and Yoshua Bengio. Learning phrase representations using rnn encoder-decoder for statistical
-machine translation. CoRR , abs/1406.1078, 2014.
-[6]Francois Chollet. Xception: Deep learning with depthwise separable convolutions. arXiv
-preprint arXiv:1610.02357 , 2016.
-[7]Junyoung Chung, Çaglar Gülçehre, Kyunghyun Cho, and Yoshua Bengio. Empirical evaluation
-of gated recurrent neural networks on sequence modeling. CoRR , abs/1412.3555, 2014.
-[8]Chris Dyer, Adhiguna Kuncoro, Miguel Ballesteros, and Noah A. Smith. Recurrent neural
-network grammars. In Proc. of NAACL , 2016.
-[9]Jonas Gehring, Michael Auli, David Grangier, Denis Yarats, and Yann N. Dauphin. Convolu-
-tional sequence to sequence learning. arXiv preprint arXiv:1705.03122v2 , 2017.
-[10] Alex Graves. Generating sequences with recurrent neural networks. arXiv preprint
-arXiv:1308.0850 , 2013.
-[11] Kaiming He, Xiangyu Zhang, Shaoqing Ren, and Jian Sun. Deep residual learning for im-
-age recognition. In Proceedings of the IEEE Conference on Computer Vision and Pattern
-Recognition , pages 770–778, 2016.
-[12] Sepp Hochreiter, Yoshua Bengio, Paolo Frasconi, and Jürgen Schmidhuber. Gradient flow in
-recurrent nets: the difficulty of learning long-term dependencies, 2001.
-[13] Sepp Hochreiter and Jürgen Schmidhuber. Long short-term memory. Neural computation ,
-9(8):1735–1780, 1997.
-[14] Zhongqiang Huang and Mary Harper. Self-training PCFG grammars with latent annotations
-across languages. In Proceedings of the 2009 Conference on Empirical Methods in Natural
-Language Processing , pages 832–841. ACL, August 2009.
-[15] Rafal Jozefowicz, Oriol Vinyals, Mike Schuster, Noam Shazeer, and Yonghui Wu. Exploring
-the limits of language modeling. arXiv preprint arXiv:1602.02410 , 2016.
-[16] Łukasz Kaiser and Samy Bengio. Can active memory replace attention? In Advances in Neural
-Information Processing Systems, (NIPS) , 2016.
-[17] Łukasz Kaiser and Ilya Sutskever. Neural GPUs learn algorithms. In International Conference
-on Learning Representations (ICLR) , 2016.
-[18] Nal Kalchbrenner, Lasse Espeholt, Karen Simonyan, Aaron van den Oord, Alex Graves, and Ko-
-ray Kavukcuoglu. Neural machine translation in linear time. arXiv preprint arXiv:1610.10099v2 ,
-2017.
-[19] Yoon Kim, Carl Denton, Luong Hoang, and Alexander M. Rush. Structured attention networks.
-InInternational Conference on Learning Representations , 2017.
-[20] Diederik Kingma and Jimmy Ba. Adam: A method for stochastic optimization. In ICLR , 2015.
-[21] Oleksii Kuchaiev and Boris Ginsburg. Factorization tricks for LSTM networks. arXiv preprint
-arXiv:1703.10722 , 2017.
-[22] Zhouhan Lin, Minwei Feng, Cicero Nogueira dos Santos, Mo Yu, Bing Xiang, Bowen
-Zhou, and Yoshua Bengio. A structured self-attentive sentence embedding. arXiv preprint
-arXiv:1703.03130 , 2017.
-[23] Minh-Thang Luong, Quoc V . Le, Ilya Sutskever, Oriol Vinyals, and Lukasz Kaiser. Multi-task
-sequence to sequence learning. arXiv preprint arXiv:1511.06114 , 2015.
-[24] Minh-Thang Luong, Hieu Pham, and Christopher D Manning. Effective approaches to attention-
-based neural machine translation. arXiv preprint arXiv:1508.04025 , 2015.
-11
-[25] Mitchell P Marcus, Mary Ann Marcinkiewicz, and Beatrice Santorini. Building a large annotated
-corpus of english: The penn treebank. Computational linguistics , 19(2):313–330, 1993.
-[26] David McClosky, Eugene Charniak, and Mark Johnson. Effective self-training for parsing. In
-Proceedings of the Human Language Technology Conference of the NAACL, Main Conference ,
-pages 152–159. ACL, June 2006.
-[27] Ankur Parikh, Oscar Täckström, Dipanjan Das, and Jakob Uszkoreit. A decomposable attention
-model. In Empirical Methods in Natural Language Processing , 2016.
-[28] Romain Paulus, Caiming Xiong, and Richard Socher. A deep reinforced model for abstractive
-summarization. arXiv preprint arXiv:1705.04304 , 2017.
-[29] Slav Petrov, Leon Barrett, Romain Thibaux, and Dan Klein. Learning accurate, compact,
-and interpretable tree annotation. In Proceedings of the 21st International Conference on
-Computational Linguistics and 44th Annual Meeting of the ACL , pages 433–440. ACL, July
-2006.
-[30] Ofir Press and Lior Wolf. Using the output embedding to improve language models. arXiv
-preprint arXiv:1608.05859 , 2016.
-[31] Rico Sennrich, Barry Haddow, and Alexandra Birch. Neural machine translation of rare words
-with subword units. arXiv preprint arXiv:1508.07909 , 2015.
-[32] Noam Shazeer, Azalia Mirhoseini, Krzysztof Maziarz, Andy Davis, Quoc Le, Geoffrey Hinton,
-and Jeff Dean. Outrageously large neural networks: The sparsely-gated mixture-of-experts
-layer. arXiv preprint arXiv:1701.06538 , 2017.
-[33] Nitish Srivastava, Geoffrey E Hinton, Alex Krizhevsky, Ilya Sutskever, and Ruslan Salakhutdi-
-nov. Dropout: a simple way to prevent neural networks from overfitting. Journal of Machine
-Learning Research , 15(1):1929–1958, 2014.
-[34] Sainbayar Sukhbaatar, Arthur Szlam, Jason Weston, and Rob Fergus. End-to-end memory
-networks. In C. Cortes, N. D. Lawrence, D. D. Lee, M. Sugiyama, and R. Garnett, editors,
-Advances in Neural Information Processing Systems 28 , pages 2440–2448. Curran Associates,
-Inc., 2015.
-[35] Ilya Sutskever, Oriol Vinyals, and Quoc VV Le. Sequence to sequence learning with neural
-networks. In Advances in Neural Information Processing Systems , pages 3104–3112, 2014.
-[36] Christian Szegedy, Vincent Vanhoucke, Sergey Ioffe, Jonathon Shlens, and Zbigniew Wojna.
-Rethinking the inception architecture for computer vision. CoRR , abs/1512.00567, 2015.
-[37] Vinyals & Kaiser, Koo, Petrov, Sutskever, and Hinton. Grammar as a foreign language. In
-Advances in Neural Information Processing Systems , 2015.
-[38] Yonghui Wu, Mike Schuster, Zhifeng Chen, Quoc V Le, Mohammad Norouzi, Wolfgang
-Macherey, Maxim Krikun, Yuan Cao, Qin Gao, Klaus Macherey, et al. Google’s neural machine
-translation system: Bridging the gap between human and machine translation. arXiv preprint
-arXiv:1609.08144 , 2016.
-[39] Jie Zhou, Ying Cao, Xuguang Wang, Peng Li, and Wei Xu. Deep recurrent models with
-fast-forward connections for neural machine translation. CoRR , abs/1606.04199, 2016.
-[40] Muhua Zhu, Yue Zhang, Wenliang Chen, Min Zhang, and Jingbo Zhu. Fast and accurate
-shift-reduce constituent parsing. In Proceedings of the 51st Annual Meeting of the ACL (Volume
-1: Long Papers) , pages 434–443. ACL, August 2013.
-12
-Attention Visualizations
-Input-Input Layer5
-It
-is
-in
-this
-spirit
-that
-a
-majority
-of
-American
-governments
-have
-passed
-new
-laws
-since
-2009
-making
-the
-registration
-or
-voting
-process
-more
-difficult
-.
-<EOS>
-<pad>
-<pad>
-<pad>
-<pad>
-<pad>
-<pad>
-It
-is
-in
-this
-spirit
-that
-a
-majority
-of
-American
-governments
-have
-passed
-new
-laws
-since
-2009
-making
-the
-registration
-or
-voting
-process
-more
-difficult
-.
-<EOS>
-<pad>
-<pad>
-<pad>
-<pad>
-<pad>
-<pad>
-Figure 3: An example of the attention mechanism following long-distance dependencies in the
-encoder self-attention in layer 5 of 6. Many of the attention heads attend to a distant dependency of
-the verb ‘making’, completing the phrase ‘making...more difficult’. Attentions here shown only for
-the word ‘making’. Different colors represent different heads. Best viewed in color.
-13
-Input-Input Layer5
-The
-Law
-will
-never
-be
-perfect
-,
-but
-its
-application
-should
-be
-just
--
-this
-is
-what
-we
-are
-missing
-,
-in
-my
-opinion
-.
-<EOS>
-<pad>
-The
-Law
-will
-never
-be
-perfect
-,
-but
-its
-application
-should
-be
-just
--
-this
-is
-what
-we
-are
-missing
-,
-in
-my
-opinion
-.
-<EOS>
-<pad>
-Input-Input Layer5
-The
-Law
-will
-never
-be
-perfect
-,
-but
-its
-application
-should
-be
-just
--
-this
-is
-what
-we
-are
-missing
-,
-in
-my
-opinion
-.
-<EOS>
-<pad>
-The
-Law
-will
-never
-be
-perfect
-,
-but
-its
-application
-should
-be
-just
--
-this
-is
-what
-we
-are
-missing
-,
-in
-my
-opinion
-.
-<EOS>
-<pad>Figure 4: Two attention heads, also in layer 5 of 6, apparently involved in anaphora resolution. Top:
-Full attentions for head 5. Bottom: Isolated attentions from just the word ‘its’ for attention heads 5
-and 6. Note that the attentions are very sharp for this word.
-14
-Input-Input Layer5
-The
-Law
-will
-never
-be
-perfect
-,
-but
-its
-application
-should
-be
-just
--
-this
-is
-what
-we
-are
-missing
-,
-in
-my
-opinion
-.
-<EOS>
-<pad>
-The
-Law
-will
-never
-be
-perfect
-,
-but
-its
-application
-should
-be
-just
--
-this
-is
-what
-we
-are
-missing
-,
-in
-my
-opinion
-.
-<EOS>
-<pad>
-Input-Input Layer5
-The
-Law
-will
-never
-be
-perfect
-,
-but
-its
-application
-should
-be
-just
--
-this
-is
-what
-we
-are
-missing
-,
-in
-my
-opinion
-.
-<EOS>
-<pad>
-The
-Law
-will
-never
-be
-perfect
-,
-but
-its
-application
-should
-be
-just
--
-this
-is
-what
-we
-are
-missing
-,
-in
-my
-opinion
-.
-<EOS>
-<pad>Figure 5: Many of the attention heads exhibit behaviour that seems related to the structure of the
-sentence. We give two such examples above, from two different heads from the encoder self-attention
-at layer 5 of 6. The heads clearly learned to perform different tasks.
-15
 
 
-===== FILE: ConvNet.pdf =====
 
-arXiv:1409.1556v6  [cs.CV]  10 Apr 2015Publishedasa conferencepaperat ICLR2015
-VERYDEEPCONVOLUTIONAL NETWORKS
-FORLARGE-SCALEIMAGERECOGNITION
-KarenSimonyan∗& AndrewZisserman+
-VisualGeometryGroup,DepartmentofEngineeringScience, UniversityofOxford
-{karen,az }@robots.ox.ac.uk
-ABSTRACT
-In this work we investigate the effect of the convolutional n etwork depth on its
-accuracy in the large-scale image recognition setting. Our main contribution is
-a thorough evaluation of networks of increasing depth using an architecture with
-verysmall( 3×3)convolutionﬁlters,whichshowsthatasigniﬁcantimprove ment
-on the prior-art conﬁgurations can be achieved by pushing th e depth to 16–19
-weight layers. These ﬁndings were the basis of our ImageNet C hallenge 2014
-submission,whereourteamsecuredtheﬁrstandthesecondpl acesinthelocalisa-
-tion and classiﬁcation tracks respectively. We also show th at our representations
-generalise well to other datasets, where they achieve state -of-the-art results. We
-have made our two best-performingConvNet models publicly a vailable to facili-
-tate furtherresearchontheuse ofdeepvisualrepresentati onsincomputervision.
-1 INTRODUCTION
-Convolutional networks (ConvNets) have recently enjoyed a great success in large-scale im-
-age and video recognition (Krizhevskyetal., 2012; Zeiler& Fergus, 2013; Sermanetet al., 2014;
-Simonyan& Zisserman, 2014) which has become possible due to the large public image reposito-
-ries,suchasImageNet(Denget al.,2009),andhigh-perform ancecomputingsystems,suchasGPUs
-orlarge-scaledistributedclusters(Deanet al., 2012). In particular,animportantroleintheadvance
-ofdeepvisualrecognitionarchitectureshasbeenplayedby theImageNetLarge-ScaleVisualRecog-
-nition Challenge (ILSVRC) (Russakovskyet al., 2014), whic h has served as a testbed for a few
-generationsof large-scale image classiﬁcation systems, f rom high-dimensionalshallow feature en-
-codings(Perronninetal.,2010)(thewinnerofILSVRC-2011 )todeepConvNets(Krizhevskyet al.,
-2012)(thewinnerofILSVRC-2012).
-With ConvNets becoming more of a commodity in the computer vi sion ﬁeld, a number of at-
-tempts have been made to improve the original architecture o f Krizhevskyet al. (2012) in a
-bid to achieve better accuracy. For instance, the best-perf orming submissions to the ILSVRC-
-2013 (Zeiler&Fergus, 2013; Sermanetetal., 2014) utilised smaller receptive window size and
-smaller stride of the ﬁrst convolutional layer. Another lin e of improvements dealt with training
-and testing the networks densely over the whole image and ove r multiple scales (Sermanetet al.,
-2014; Howard, 2014). In this paper, we address another impor tant aspect of ConvNet architecture
-design–itsdepth. Tothisend,we ﬁxotherparametersofthea rchitecture,andsteadilyincreasethe
-depth of the network by adding more convolutionallayers, wh ich is feasible due to the use of very
-small (3×3)convolutionﬁltersinall layers.
-As a result, we come up with signiﬁcantly more accurate ConvN et architectures, which not only
-achieve the state-of-the-art accuracy on ILSVRC classiﬁca tion and localisation tasks, but are also
-applicabletootherimagerecognitiondatasets,wherethey achieveexcellentperformanceevenwhen
-usedasa partofa relativelysimple pipelines(e.g.deepfea turesclassiﬁed byalinearSVM without
-ﬁne-tuning). We havereleasedourtwobest-performingmode ls1tofacilitatefurtherresearch.
-The rest of the paper is organised as follows. In Sect. 2, we de scribe our ConvNet conﬁgurations.
-The details of the image classiﬁcation trainingand evaluat ionare then presented in Sect. 3, and the
-∗current afﬁliation: Google DeepMind+current afﬁliation: Universityof Oxfordand Google DeepMi nd
-1http://www.robots.ox.ac.uk/ ˜vgg/research/very_deep/
-1
-Publishedasa conferencepaperat ICLR2015
-conﬁgurations are compared on the ILSVRC classiﬁcation tas k in Sect. 4. Sect. 5 concludes the
-paper. For completeness,we also describeand assess our ILS VRC-2014object localisationsystem
-inAppendixA,anddiscussthegeneralisationofverydeepfe aturestootherdatasetsinAppendixB.
-Finally,AppendixCcontainsthelist ofmajorpaperrevisio ns.
-2 CONVNETCONFIGURATIONS
-To measure the improvement brought by the increased ConvNet depth in a fair setting, all our
-ConvNet layer conﬁgurations are designed using the same pri nciples, inspired by Ciresan etal.
-(2011); Krizhevskyet al. (2012). In this section, we ﬁrst de scribe a generic layout of our ConvNet
-conﬁgurations(Sect.2.1)andthendetailthespeciﬁcconﬁg urationsusedintheevaluation(Sect.2.2).
-Ourdesignchoicesarethendiscussedandcomparedtothepri orart inSect. 2.3.
-2.1 A RCHITECTURE
-During training, the input to our ConvNets is a ﬁxed-size 224×224RGB image. The only pre-
-processingwedoissubtractingthemeanRGBvalue,computed onthetrainingset,fromeachpixel.
-Theimageispassedthroughastackofconvolutional(conv.) layers,whereweuseﬁlterswithavery
-small receptive ﬁeld: 3×3(which is the smallest size to capture the notion of left/rig ht, up/down,
-center). In one of the conﬁgurationswe also utilise 1×1convolutionﬁlters, which can be seen as
-a linear transformationof the input channels (followed by n on-linearity). The convolutionstride is
-ﬁxedto1pixel;thespatialpaddingofconv.layerinputissuchthatt hespatialresolutionispreserved
-afterconvolution,i.e. the paddingis 1pixel for3×3conv.layers. Spatial poolingis carriedoutby
-ﬁvemax-poolinglayers,whichfollowsomeoftheconv.layer s(notalltheconv.layersarefollowed
-bymax-pooling). Max-poolingisperformedovera 2×2pixelwindow,withstride 2.
-Astackofconvolutionallayers(whichhasadifferentdepth indifferentarchitectures)isfollowedby
-three Fully-Connected(FC) layers: the ﬁrst two have4096ch annelseach,the thirdperforms1000-
-way ILSVRC classiﬁcation and thus contains1000channels(o ne foreach class). The ﬁnal layer is
-thesoft-maxlayer. Theconﬁgurationofthefullyconnected layersis thesameinall networks.
-Allhiddenlayersareequippedwiththerectiﬁcation(ReLU( Krizhevskyetal.,2012))non-linearity.
-We note that none of our networks (except for one) contain Loc al Response Normalisation
-(LRN) normalisation (Krizhevskyet al., 2012): as will be sh own in Sect. 4, such normalisation
-does not improve the performance on the ILSVRC dataset, but l eads to increased memory con-
-sumption and computation time. Where applicable, the param eters for the LRN layer are those
-of(Krizhevskyetal., 2012).
-2.2 C ONFIGURATIONS
-The ConvNet conﬁgurations, evaluated in this paper, are out lined in Table 1, one per column. In
-the following we will refer to the nets by their names (A–E). A ll conﬁgurationsfollow the generic
-design presented in Sect. 2.1, and differ only in the depth: f rom 11 weight layers in the network A
-(8conv.and3FClayers)to19weightlayersinthenetworkE(1 6conv.and3FClayers). Thewidth
-of conv.layers (the number of channels) is rather small, sta rting from 64in the ﬁrst layer and then
-increasingbyafactorof 2aftereachmax-poolinglayer,untilit reaches 512.
-In Table 2 we reportthe numberof parametersfor each conﬁgur ation. In spite of a large depth, the
-numberof weights in our netsis not greater thanthe numberof weightsin a moreshallow net with
-largerconv.layerwidthsandreceptiveﬁelds(144Mweights in(Sermanetet al., 2014)).
-2.3 D ISCUSSION
-Our ConvNet conﬁgurations are quite different from the ones used in the top-performing entries
-of the ILSVRC-2012 (Krizhevskyetal., 2012) and ILSVRC-201 3 competitions (Zeiler& Fergus,
-2013;Sermanetet al.,2014). Ratherthanusingrelativelyl argereceptiveﬁeldsintheﬁrstconv.lay-
-ers(e.g.11×11withstride 4in(Krizhevskyet al.,2012),or 7×7withstride 2in(Zeiler& Fergus,
-2013; Sermanetet al., 2014)), we use very small 3×3receptive ﬁelds throughout the whole net,
-whichareconvolvedwiththeinputateverypixel(withstrid e1). Itiseasytoseethatastackoftwo
-3×3conv.layers(withoutspatialpoolinginbetween)hasaneff ectivereceptiveﬁeldof 5×5;three
-2
-Publishedasa conferencepaperat ICLR2015
-Table 1:ConvNet conﬁgurations (shown in columns). The depth of the conﬁgurations increase s
-fromtheleft(A)totheright(E),asmorelayersareadded(th eaddedlayersareshowninbold). The
-convolutional layer parameters are denoted as “conv /an}bracketle{treceptive ﬁeld size /an}bracketri}ht-/an}bracketle{tnumber of channels /an}bracketri}ht”.
-TheReLU activationfunctionisnotshownforbrevity.
-ConvNet Conﬁguration
-A A-LRN B C D E
-11weight 11weight 13 weight 16weight 16weight 19 weight
-layers layers layers layers layers layers
-input (224×224RGBimage)
-conv3-64 conv3-64 conv3-64 conv3-64 conv3-64 conv3-64
-LRN conv3-64 conv3-64 conv3-64 conv3-64
-maxpool
-conv3-128 conv3-128 conv3-128 conv3-128 conv3-128 conv3-128
-conv3-128 conv3-128 conv3-128 conv3-128
-maxpool
-conv3-256 conv3-256 conv3-256 conv3-256 conv3-256 conv3-256
-conv3-256 conv3-256 conv3-256 conv3-256 conv3-256 conv3-256
-conv1-256 conv3-256 conv3-256
-conv3-256
-maxpool
-conv3-512 conv3-512 conv3-512 conv3-512 conv3-512 conv3-512
-conv3-512 conv3-512 conv3-512 conv3-512 conv3-512 conv3-512
-conv1-512 conv3-512 conv3-512
-conv3-512
-maxpool
-conv3-512 conv3-512 conv3-512 conv3-512 conv3-512 conv3-512
-conv3-512 conv3-512 conv3-512 conv3-512 conv3-512 conv3-512
-conv1-512 conv3-512 conv3-512
-conv3-512
-maxpool
-FC-4096
-FC-4096
-FC-1000
-soft-max
-Table2:Number ofparameters (inmillions).
-Network A,A-LRN BCDE
-Number of parameters 133 133134138144
-such layers have a 7×7effectivereceptive ﬁeld. So what have we gainedby using, fo r instance, a
-stackofthree 3×3conv.layersinsteadofasingle 7×7layer? First,weincorporatethreenon-linear
-rectiﬁcation layers instead of a single one, which makes the decision functionmore discriminative.
-Second, we decrease the number of parameters: assuming that both the input and the output of a
-three-layer 3×3convolutionstack has Cchannels,the stack is parametrisedby 3/parenleftbig
-32C2/parenrightbig
-= 27C2
-weights; at the same time, a single 7×7conv. layer would require 72C2= 49C2parameters, i.e.
-81%more. Thiscan be seen as imposinga regularisationon the 7×7conv.ﬁlters, forcingthemto
-haveadecompositionthroughthe 3×3ﬁlters(withnon-linearityinjectedin between).
-The incorporation of 1×1conv. layers (conﬁguration C, Table 1) is a way to increase th e non-
-linearity of the decision function without affecting the re ceptive ﬁelds of the conv. layers. Even
-thoughinourcasethe 1×1convolutionisessentiallyalinearprojectionontothespa ceofthesame
-dimensionality(thenumberofinputandoutputchannelsist hesame),anadditionalnon-linearityis
-introducedbytherectiﬁcationfunction. Itshouldbenoted that1×1conv.layershaverecentlybeen
-utilisedin the“NetworkinNetwork”architectureofLinet a l.(2014).
-Small-size convolution ﬁlters have been previously used by Ciresan etal. (2011), but their nets
-are signiﬁcantly less deep than ours, and they did not evalua te on the large-scale ILSVRC
-dataset. Goodfellowet al. (2014) applied deep ConvNets ( 11weight layers) to the task of
-street number recognition, and showed that the increased de pth led to better performance.
-GoogLeNet(Szegedyet al., 2014), a top-performingentryof the ILSVRC-2014classiﬁcation task,
-was developed independentlyof our work, but is similar in th at it is based on very deep ConvNets
-3
-Publishedasa conferencepaperat ICLR2015
-(22 weight layers) and small convolution ﬁlters (apart from 3×3, they also use 1×1and5×5
-convolutions). Their network topology is, however, more co mplex than ours, and the spatial reso-
-lution of the feature maps is reduced more aggressively in th e ﬁrst layers to decrease the amount
-of computation. As will be shown in Sect. 4.5, our model is out performing that of Szegedyetal.
-(2014)intermsofthesingle-networkclassiﬁcationaccura cy.
-3 CLASSIFICATION FRAMEWORK
-In the previous section we presented the details of our netwo rk conﬁgurations. In this section, we
-describethe detailsofclassiﬁcationConvNettrainingand evaluation.
-3.1 T RAINING
-The ConvNet training procedure generally follows Krizhevs kyetal. (2012) (except for sampling
-theinputcropsfrommulti-scaletrainingimages,asexplai nedlater). Namely,thetrainingiscarried
-out by optimising the multinomial logistic regression obje ctive using mini-batch gradient descent
-(based on back-propagation(LeCunet al., 1989)) with momen tum. The batch size was set to 256,
-momentum to 0.9. The training was regularised by weight decay (the L2penalty multiplier set to
-5·10−4)anddropoutregularisationfortheﬁrsttwofully-connect edlayers(dropoutratiosetto 0.5).
-Thelearningrate wasinitially setto 10−2,andthendecreasedbyafactorof 10whenthevalidation
-set accuracy stopped improving. In total, the learning rate was decreased 3 times, and the learning
-was stopped after 370K iterations (74 epochs). We conjecture that in spite of the l arger number of
-parametersandthegreaterdepthofournetscomparedto(Kri zhevskyetal.,2012),thenetsrequired
-lessepochstoconvergedueto(a)implicitregularisationi mposedbygreaterdepthandsmallerconv.
-ﬁlter sizes; (b)pre-initialisationofcertainlayers.
-The initialisation of the networkweightsis important,sin ce bad initialisation can stall learningdue
-to the instability of gradient in deep nets. To circumvent th is problem, we began with training
-the conﬁgurationA (Table 1), shallow enoughto be trained wi th randominitialisation. Then,when
-trainingdeeperarchitectures,weinitialisedtheﬁrstfou rconvolutionallayersandthelastthreefully-
-connectedlayerswiththelayersofnetA(theintermediatel ayerswereinitialisedrandomly). Wedid
-notdecreasethelearningrateforthepre-initialisedlaye rs,allowingthemtochangeduringlearning.
-For random initialisation (where applicable), we sampled t he weights from a normal distribution
-with thezeromeanand 10−2variance. The biaseswere initialisedwith zero. It isworth notingthat
-after the paper submission we found that it is possible to ini tialise the weights without pre-training
-byusingthe randominitialisationprocedureofGlorot&Ben gio(2010).
-Toobtaintheﬁxed-size 224×224ConvNetinputimages,theywererandomlycroppedfromresca led
-training images (one crop per image per SGD iteration). To fu rther augment the training set, the
-cropsunderwentrandomhorizontalﬂippingandrandomRGBco lourshift(Krizhevskyet al.,2012).
-Trainingimagerescalingisexplainedbelow.
-Training image size. LetSbe the smallest side of an isotropically-rescaledtraining image, from
-which the ConvNet input is cropped (we also refer to Sas the training scale). While the crop size
-is ﬁxed to 224×224, in principle Scan take on any value not less than 224: forS= 224the crop
-will capture whole-image statistics, completely spanning the smallest side of a training image; for
-S≫224thecropwillcorrespondtoasmallpartoftheimage,contain ingasmallobjectoranobject
-part.
-We considertwoapproachesforsettingthetrainingscale S. Theﬁrst istoﬁx S,whichcorresponds
-to single-scale training (note that image content within th e sampled crops can still represent multi-
-scale image statistics). In our experiments, we evaluated m odels trained at two ﬁxed scales: S=
-256(which has been widely used in the prior art (Krizhevskyet al ., 2012; Zeiler&Fergus, 2013;
-Sermanetet al., 2014)) and S= 384. Given a ConvNet conﬁguration,we ﬁrst trained the network
-usingS= 256. To speed-up training of the S= 384network, it was initialised with the weights
-pre-trainedwith S= 256,andwe useda smallerinitiallearningrateof 10−3.
-The second approachto setting Sis multi-scale training, where each training image is indiv idually
-rescaled by randomly sampling Sfrom a certain range [Smin,Smax](we used Smin= 256and
-Smax= 512). Sinceobjectsinimagescanbeofdifferentsize,itisbene ﬁcialtotakethisintoaccount
-duringtraining. Thiscanalso beseen astrainingset augmen tationbyscale jittering,wherea single
-4
-Publishedasa conferencepaperat ICLR2015
-model is trained to recognise objects over a wide range of sca les. For speed reasons, we trained
-multi-scale models by ﬁne-tuning all layers of a single-sca le model with the same conﬁguration,
-pre-trainedwithﬁxed S= 384.
-3.2 T ESTING
-Attest time,givena trainedConvNetandaninputimage,itis classiﬁed inthefollowingway. First,
-it is isotropically rescaled to a pre-deﬁned smallest image side, denoted as Q(we also refer to it
-as the test scale). We note that Qis not necessarily equal to the training scale S(as we will show
-in Sect. 4, usingseveralvaluesof QforeachSleadsto improvedperformance). Then,the network
-is applied densely overthe rescaled test image in a way simil ar to (Sermanetet al., 2014). Namely,
-the fully-connected layers are ﬁrst converted to convoluti onal layers (the ﬁrst FC layer to a 7×7
-conv. layer, the last two FC layers to 1×1conv. layers). The resulting fully-convolutional net is
-then applied to the whole (uncropped) image. The result is a c lass score map with the number of
-channels equal to the number of classes, and a variable spati al resolution, dependent on the input
-imagesize. Finally,toobtainaﬁxed-sizevectorofclasssc oresfortheimage,theclassscoremapis
-spatially averaged(sum-pooled). We also augmentthe test s et by horizontalﬂippingof the images;
-thesoft-maxclassposteriorsoftheoriginalandﬂippedima gesareaveragedtoobtaintheﬁnalscores
-fortheimage.
-Since the fully-convolutionalnetwork is applied over the w hole image, there is no need to sample
-multiple crops at test time (Krizhevskyetal., 2012), which is less efﬁcient as it requires network
-re-computationforeachcrop. Atthesametime,usingalarge setofcrops,asdonebySzegedyetal.
-(2014),canleadtoimprovedaccuracy,asit resultsin aﬁner samplingoftheinputimagecompared
-tothefully-convolutionalnet. Also,multi-cropevaluati oniscomplementarytodenseevaluationdue
-to different convolution boundary conditions: when applyi ng a ConvNet to a crop, the convolved
-feature mapsare paddedwith zeros, while in the case of dense evaluationthe paddingfor the same
-crop naturally comes from the neighbouring parts of an image (due to both the convolutions and
-spatial pooling), which substantially increases the overa ll network receptive ﬁeld, so more context
-iscaptured. Whilewebelievethatinpracticetheincreased computationtimeofmultiplecropsdoes
-notjustifythepotentialgainsinaccuracy,forreferencew ealsoevaluateournetworksusing 50crops
-perscale( 5×5regulargridwith 2ﬂips),foratotalof 150cropsover 3scales,whichiscomparable
-to144cropsover 4scalesusedbySzegedyetal. (2014).
-3.3 IMPLEMENTATION DETAILS
-OurimplementationisderivedfromthepubliclyavailableC ++ Caffetoolbox(Jia,2013)(branched
-out in December 2013), but contains a number of signiﬁcant mo diﬁcations, allowing us to perform
-trainingandevaluationonmultipleGPUsinstalledinasing lesystem,aswellastrainandevaluateon
-full-size (uncropped) images at multiple scales (as descri bed above). Multi-GPU training exploits
-data parallelism, and is carried out by splitting each batch of training images into several GPU
-batches, processed in parallel on each GPU. After the GPU bat ch gradientsare computed, they are
-averaged to obtain the gradient of the full batch. Gradient c omputation is synchronous across the
-GPUs, sothe resultisexactlythesame aswhentrainingona si ngleGPU.
-While more sophisticated methods of speeding up ConvNet tra ining have been recently pro-
-posed (Krizhevsky, 2014), which employmodeland data paral lelism for differentlayersof the net,
-wehavefoundthatourconceptuallymuchsimplerschemealre adyprovidesaspeedupof 3.75times
-on an off-the-shelf4-GPU system, as comparedto using a sing le GPU. On a system equippedwith
-fourNVIDIATitanBlackGPUs,trainingasinglenettook2–3w eeksdependingonthearchitecture.
-4 CLASSIFICATION EXPERIMENTS
-Dataset. In this section, we present the image classiﬁcation results achieved by the described
-ConvNetarchitecturesontheILSVRC-2012dataset(whichwa susedforILSVRC2012–2014chal-
-lenges). The dataset includes images of 1000 classes, and is split into three sets: training ( 1.3M
-images), validation ( 50K images), and testing ( 100K images with held-out class labels). The clas-
-siﬁcation performanceis evaluated using two measures: the top-1 and top-5 error. The former is a
-multi-class classiﬁcation error, i.e. the proportion of in correctly classiﬁed images; the latter is the
-5
-Publishedasa conferencepaperat ICLR2015
-main evaluation criterion used in ILSVRC, and is computed as the proportion of images such that
-theground-truthcategoryisoutsidethetop-5predictedca tegories.
-Forthemajorityofexperiments,weusedthevalidationseta sthetestset. Certainexperimentswere
-also carried out on the test set and submitted to the ofﬁcial I LSVRC server as a “VGG” team entry
-tothe ILSVRC-2014competition(Russakovskyet al., 2014).
-4.1 SINGLESCALEEVALUATION
-We begin with evaluating the performanceof individual Conv Net models at a single scale with the
-layerconﬁgurationsdescribedin Sect. 2.2. The test images ize was set as follows: Q=Sforﬁxed
-S,andQ= 0.5(Smin+Smax)forjittered S∈[Smin,Smax]. Theresultsofareshownin Table3.
-First, we note that using local response normalisation (A-L RN network) does not improve on the
-model A without any normalisation layers. We thus do not empl oy normalisation in the deeper
-architectures(B–E).
-Second, we observe that the classiﬁcation error decreases w ith the increased ConvNet depth: from
-11 layers in A to 19 layers in E. Notably, in spite of the same de pth, the conﬁguration C (which
-containsthree 1×1conv.layers),performsworsethantheconﬁgurationD,whic huses3×3conv.
-layersthroughoutthenetwork. Thisindicatesthatwhileth e additionalnon-linearitydoeshelp(Cis
-better than B), it is also important to capture spatial conte xt by using conv. ﬁlters with non-trivial
-receptive ﬁelds (D is better than C). The error rate of our arc hitecture saturates when the depth
-reaches19layers,butevendeepermodelsmightbebeneﬁcialforlarger datasets. Wealsocompared
-the net B with a shallow net with ﬁve 5×5conv. layers, which was derived from B by replacing
-eachpairof 3×3conv. layerswithasingle 5×5conv. layer(whichhasthesamereceptiveﬁeldas
-explained in Sect. 2.3). The top-1 error of the shallow net wa s measured to be 7%higher than that
-of B (on a center crop),which conﬁrmsthat a deepnet with smal l ﬁlters outperformsa shallow net
-withlargerﬁlters.
-Finally, scale jittering at training time ( S∈[256;512] ) leads to signiﬁcantly better results than
-training on images with ﬁxed smallest side ( S= 256orS= 384), even though a single scale is
-usedattesttime. Thisconﬁrmsthattrainingsetaugmentati onbyscalejitteringisindeedhelpfulfor
-capturingmulti-scaleimagestatistics.
-Table3:ConvNetperformanceatasingle testscale.
-ConvNet conﬁg. (Table 1) smallest image side top-1 val.error (%) top-5 val.error (%)
-train(S)test (Q)
-A 256 256 29.6 10.4
-A-LRN 256 256 29.7 10.5
-B 256 256 28.7 9.9
-C256 256 28.1 9.4
-384 384 28.1 9.3
-[256;512] 384 27.3 8.8
-D256 256 27.0 8.8
-384 384 26.8 8.7
-[256;512] 384 25.6 8.1
-E256 256 27.3 9.0
-384 384 26.9 8.7
-[256;512] 384 25.5 8.0
-4.2 M ULTI-SCALEEVALUATION
-HavingevaluatedtheConvNetmodelsatasinglescale,wenow assesstheeffectofscalejitteringat
-testtime. Itconsistsofrunningamodeloverseveralrescal edversionsofatestimage(corresponding
-to different values of Q), followed by averaging the resulting class posteriors. Co nsidering that a
-large discrepancy between training and testing scales lead s to a drop in performance, the models
-trained with ﬁxed Swere evaluated over three test image sizes, close to the trai ning one: Q=
-{S−32,S,S+ 32}. At the same time, scale jittering at training time allows th e network to be
-appliedto a widerrangeofscales at test time,so the modeltr ainedwithvariable S∈[Smin;Smax]
-wasevaluatedoveralargerrangeofsizes Q={Smin,0.5(Smin+Smax),Smax}.
-6
-Publishedasa conferencepaperat ICLR2015
-Theresults,presentedinTable4,indicatethatscalejitte ringattest timeleadstobetterperformance
-(as compared to evaluating the same model at a single scale, s hown in Table 3). As before, the
-deepest conﬁgurations(D and E) perform the best, and scale j ittering is better than training with a
-ﬁxed smallest side S. Our best single-network performance on the validation set is24.8%/7.5%
-top-1/top-5error(highlightedinboldinTable4). Onthete stset,theconﬁgurationEachieves 7.3%
-top-5error.
-Table4:ConvNetperformanceatmultiple test scales.
-ConvNet conﬁg. (Table 1) smallest image side top-1val. error (%) top-5val. error (%)
-train(S)test(Q)
-B 256 224,256,288 28.2 9.6
-C256 224,256,288 27.7 9.2
-384 352,384,416 27.8 9.2
-[256;512] 256,384,512 26.3 8.2
-D256 224,256,288 26.6 8.6
-384 352,384,416 26.5 8.6
-[256;512] 256,384,512 24.8 7.5
-E256 224,256,288 26.9 8.7
-384 352,384,416 26.7 8.6
-[256;512] 256,384,512 24.8 7.5
-4.3 M ULTI-CROP EVALUATION
-In Table 5 we compare dense ConvNet evaluation with mult-cro p evaluation (see Sect. 3.2 for de-
-tails). We also assess the complementarityof thetwo evalua tiontechniquesbyaveragingtheirsoft-
-max outputs. As can be seen, using multiple crops performs sl ightly better than dense evaluation,
-andthe two approachesareindeedcomplementary,astheir co mbinationoutperformseach ofthem.
-As noted above, we hypothesize that this is due to a different treatment of convolution boundary
-conditions.
-Table 5:ConvNetevaluationtechniques comparison. Inall experimentsthe trainingscale Swas
-sampledfrom [256;512] ,andthreetest scales Qwereconsidered: {256,384,512}.
-ConvNet conﬁg. (Table 1) Evaluationmethod top-1 val. error(%) top-5 val. error (%)
-Ddense 24.8 7.5
-multi-crop 24.6 7.5
-multi-crop &dense 24.4 7.2
-Edense 24.8 7.5
-multi-crop 24.6 7.4
-multi-crop &dense 24.4 7.1
-4.4 C ONVNETFUSION
-Upuntilnow,weevaluatedtheperformanceofindividualCon vNetmodels. Inthispartoftheexper-
-iments,wecombinetheoutputsofseveralmodelsbyaveragin gtheirsoft-maxclassposteriors. This
-improvesthe performancedueto complementarityof the mode ls, andwas used in the top ILSVRC
-submissions in 2012 (Krizhevskyet al., 2012) and 2013 (Zeil er&Fergus, 2013; Sermanetet al.,
-2014).
-The results are shown in Table 6. By the time of ILSVRC submiss ion we had only trained the
-single-scale networks, as well as a multi-scale model D (by ﬁ ne-tuning only the fully-connected
-layers rather than all layers). The resulting ensemble of 7 n etworks has 7.3%ILSVRC test error.
-After the submission, we considered an ensemble of only two b est-performing multi-scale models
-(conﬁgurations D and E), which reduced the test error to 7.0%using dense evaluation and 6.8%
-using combined dense and multi-crop evaluation. For refere nce, our best-performingsingle model
-achieves7.1%error(modelE, Table5).
-4.5 C OMPARISON WITH THE STATE OF THE ART
-Finally, we compare our results with the state of the art in Ta ble 7. In the classiﬁcation task of
-ILSVRC-2014 challenge (Russakovskyet al., 2014), our “VGG ” team secured the 2nd place with
-7
-Publishedasa conferencepaperat ICLR2015
-Table6:Multiple ConvNetfusion results.
-Combined ConvNet modelsError
-top-1 val top-5val top-5test
-ILSVRCsubmission
-(D/256/224,256,288), (D/384/352,384,416), (D/[256;512 ]/256,384,512)
-(C/256/224,256,288), (C/384/352,384,416)
-(E/256/224,256,288), (E/384/352,384,416)24.7 7.5 7.3
-post-submission
-(D/[256;512]/256,384,512), (E/[256;512]/256,384,512) ,dense eval. 24.0 7.1 7.0
-(D/[256;512]/256,384,512), (E/[256;512]/256,384,512) ,multi-crop 23.9 7.2 -
-(D/[256;512]/256,384,512), (E/[256;512]/256,384,512) ,multi-crop &dense eval. 23.7 6.8 6.8
-7.3%test errorusinganensembleof7 models. Afterthesubmissio n,we decreasedtheerrorrateto
-6.8%usinganensembleof2models.
-As can be seen from Table 7, our very deep ConvNetssigniﬁcant ly outperformthe previousgener-
-ation of models, which achieved the best results in the ILSVR C-2012 and ILSVRC-2013 competi-
-tions. Our result is also competitivewith respect to the cla ssiﬁcation task winner(GoogLeNetwith
-6.7%error) and substantially outperforms the ILSVRC-2013 winn ing submission Clarifai, which
-achieved 11.2%with outside training data and 11.7%without it. This is remarkable, considering
-that our best result is achievedby combiningjust two models – signiﬁcantly less than used in most
-ILSVRC submissions. In terms of the single-net performance , our architecture achieves the best
-result (7.0%test error), outperforming a single GoogLeNet by 0.9%. Notably, we did not depart
-from the classical ConvNet architecture of LeCunetal. (198 9), but improved it by substantially
-increasingthedepth.
-Table 7:Comparison with the state of the art in ILSVRC classiﬁcation . Our methodis denoted
-as“VGG”.Onlytheresultsobtainedwithoutoutsidetrainin gdataarereported.
-Method top-1 val. error(%) top-5val. error (%) top-5testerror (%)
-VGG(2nets, multi-crop& dense eval.) 23.7 6.8 6.8
-VGG(1net, multi-crop& dense eval.) 24.4 7.1 7.0
-VGG(ILSVRCsubmission, 7nets, dense eval.) 24.7 7.5 7.3
-GoogLeNet (Szegedy et al., 2014) (1net) - 7.9
-GoogLeNet (Szegedy et al., 2014) (7nets) - 6.7
-MSRA(He et al., 2014) (11nets) - - 8.1
-MSRA(He et al., 2014) (1net) 27.9 9.1 9.1
-Clarifai(Russakovsky et al., 2014) (multiplenets) - - 11.7
-Clarifai(Russakovsky et al., 2014) (1net) - - 12.5
-Zeiler& Fergus (Zeiler&Fergus, 2013) (6nets) 36.0 14.7 14.8
-Zeiler& Fergus (Zeiler&Fergus, 2013) (1net) 37.5 16.0 16.1
-OverFeat (Sermanetet al.,2014) (7nets) 34.0 13.2 13.6
-OverFeat (Sermanetet al.,2014) (1net) 35.7 14.2 -
-Krizhevsky et al.(Krizhevsky et al., 2012) (5nets) 38.1 16.4 16.4
-Krizhevsky et al.(Krizhevsky et al., 2012) (1net) 40.7 18.2 -
-5 CONCLUSION
-In this work we evaluated very deep convolutional networks ( up to 19 weight layers) for large-
-scale image classiﬁcation. It was demonstrated that the rep resentation depth is beneﬁcial for the
-classiﬁcationaccuracy,andthatstate-of-the-artperfor manceontheImageNetchallengedatasetcan
-beachievedusingaconventionalConvNetarchitecture(LeC unet al.,1989;Krizhevskyet al.,2012)
-withsubstantiallyincreaseddepth. Intheappendix,weals oshowthatourmodelsgeneralisewellto
-a wide range of tasks and datasets, matchingor outperformin gmore complexrecognitionpipelines
-builtaroundlessdeepimagerepresentations. Ourresultsy etagainconﬁrmtheimportanceof depth
-invisualrepresentations.
-ACKNOWLEDGEMENTS
-ThisworkwassupportedbyERCgrantVisRecno.228180. Wegra tefullyacknowledgethesupport
-ofNVIDIACorporationwiththedonationoftheGPUsusedfort hisresearch.
-8
-Publishedasa conferencepaperat ICLR2015
-REFERENCES
-Bell, S., Upchurch, P.,Snavely, N., and Bala, K. Material re cognition inthe wild withthe materials in context
-database. CoRR,abs/1412.0623, 2014.
-Chatﬁeld, K., Simonyan, K., Vedaldi, A., and Zisserman, A. R eturn of the devil in the details: Delving deep
-intoconvolutional nets. In Proc.BMVC. ,2014.
-Cimpoi,M.,Maji,S.,andVedaldi,A. Deepconvolutionalﬁlt erbanksfortexturerecognitionandsegmentation.
-CoRR,abs/1411.6836, 2014.
-Ciresan, D. C., Meier, U., Masci, J., Gambardella, L. M., and Schmidhuber, J. Flexible, high performance
-convolutional neural networks for image classiﬁcation. In IJCAI,pp. 1237–1242, 2011.
-Dean, J., Corrado, G., Monga, R., Chen, K., Devin, M., Mao, M. , Ranzato, M., Senior, A., Tucker, P., Yang,
-K.,Le,Q. V.,andNg, A.Y. Large scale distributeddeepnetwo rks. InNIPS,pp. 1232–1240, 2012.
-Deng, J., Dong, W., Socher, R., Li, L.-J., Li, K., and Fei-Fei , L. Imagenet: A large-scale hierarchical image
-database. In Proc.CVPR ,2009.
-Donahue,J.,Jia,Y.,Vinyals,O.,Hoffman,J.,Zhang,N.,Tz eng,E.,andDarrell,T.Decaf: Adeepconvolutional
-activation feature for generic visual recognition. CoRR,abs/1310.1531, 2013.
-Everingham, M., Eslami, S.M. A., Van Gool, L., Williams,C., Winn, J., and Zisserman, A. The Pascal visual
-object classes challenge: Aretrospective. IJCV,111(1):98–136, 2015.
-Fei-Fei, L., Fergus, R., and Perona, P. Learning generative visual models from few training examples: An
-incremental bayesian approach tested on 101 object categor ies. InIEEE CVPR Workshop of Generative
-Model BasedVision , 2004.
-Girshick, R. B., Donahue, J., Darrell, T., and Malik, J. Rich feature hierarchies for accurate object detection
-and semantic segmentation. CoRR,abs/1311.2524v5, 2014. PublishedinProc.CVPR,2014.
-Gkioxari, G.,Girshick, R.,and Malik, J. Actions and attrib utes from wholes and parts. CoRR,abs/1412.2604,
-2014.
-Glorot, X. andBengio, Y. Understanding the difﬁcultyof tra iningdeep feedforward neural networks. In Proc.
-AISTATS,volume 9, pp. 249–256, 2010.
-Goodfellow, I. J., Bulatov, Y., Ibarz, J., Arnoud, S., and Sh et, V. Multi-digit number recognition from street
-view imagery usingdeep convolutional neural networks. In Proc.ICLR ,2014.
-Grifﬁn, G., Holub, A., and Perona, P. Caltech-256 object cat egory dataset. Technical Report 7694, California
-Institute of Technology, 2007.
-He, K., Zhang, X., Ren, S., and Sun, J. Spatial pyramid poolin g in deep convolutional networks for visual
-recognition. CoRR,abs/1406.4729v2, 2014.
-Hoai, M. Regularizedmax pooling forimage categorization. InProc. BMVC. ,2014.
-Howard, A.G. Someimprovements ondeepconvolutional neura l networkbasedimageclassiﬁcation. In Proc.
-ICLR,2014.
-Jia, Y. Caffe: An open source convolutional architecture fo r fast feature embedding.
-http://caffe.berkeleyvision.org/ ,2013.
-Karpathy, A. and Fei-Fei, L. Deep visual-semantic alignmen ts for generating image descriptions. CoRR,
-abs/1412.2306, 2014.
-Kiros, R., Salakhutdinov, R., and Zemel, R. S. Unifying visu al-semantic embeddings with multimodal neural
-language models. CoRR,abs/1411.2539, 2014.
-Krizhevsky, A. One weirdtrickfor parallelizingconvoluti onal neural networks. CoRR,abs/1404.5997, 2014.
-Krizhevsky, A., Sutskever, I., and Hinton, G. E. ImageNet cl assiﬁcation with deep convolutional neural net-
-works. In NIPS,pp. 1106–1114, 2012.
-LeCun,Y.,Boser, B.,Denker, J.S.,Henderson, D.,Howard, R .E.,Hubbard, W.,andJackel, L.D. Backpropa-
-gationapplied tohandwrittenzipcode recognition. Neural Computation , 1(4):541–551, 1989.
-Lin,M., Chen, Q.,andYan, S. Networkinnetwork. In Proc.ICLR ,2014.
-Long, J., Shelhamer, E., and Darrell, T. Fully convolutiona l networks for semantic segmentation. CoRR,
-abs/1411.4038, 2014.
-Oquab, M., Bottou, L., Laptev, I., and Sivic, J. Learning and Transferring Mid-Level Image Representations
-using Convolutional Neural Networks. In Proc.CVPR ,2014.
-Perronnin, F.,S´ anchez, J.,andMensink, T. Improving theF isherkernel forlarge-scale image classiﬁcation. In
-Proc.ECCV ,2010.
-Razavian, A.,Azizpour, H.,Sullivan, J.,andCarlsson,S. C NNFeaturesoff-the-shelf: anAstounding Baseline
-for Recognition. CoRR,abs/1403.6382, 2014.
-9
-Publishedasa conferencepaperat ICLR2015
-Russakovsky, O., Deng, J., Su, H., Krause, J., Satheesh, S., Ma, S., Huang, Z., Karpathy, A., Khosla, A.,
-Bernstein, M., Berg, A. C., and Fei-Fei, L. ImageNet large sc ale visual recognition challenge. CoRR,
-abs/1409.0575, 2014.
-Sermanet,P.,Eigen, D.,Zhang, X.,Mathieu, M.,Fergus,R., andLeCun,Y. OverFeat: IntegratedRecognition,
-Localizationand Detectionusing Convolutional Networks. InProc.ICLR ,2014.
-Simonyan, K. and Zisserman, A. Two-stream convolutional ne tworks for action recognition in videos. CoRR,
-abs/1406.2199, 2014. Published inProc.NIPS,2014.
-Szegedy, C., Liu, W.,Jia, Y., Sermanet, P.,Reed, S.,Anguel ov, D.,Erhan, D., Vanhoucke, V., and Rabinovich,
-A. Goingdeeper withconvolutions. CoRR,abs/1409.4842, 2014.
-Wei, Y., Xia, W., Huang, J., Ni, B., Dong, J., Zhao, Y., and Yan , S. CNN: Single-label to multi-label. CoRR,
-abs/1406.5726, 2014.
-Zeiler, M. D. and Fergus, R. Visualizing and understanding c onvolutional networks. CoRR, abs/1311.2901,
-2013. PublishedinProc. ECCV,2014.
-A LOCALISATION
-In the main bodyof the paper we have consideredthe classiﬁca tion task of the ILSVRC challenge,
-and performed a thorough evaluation of ConvNet architectur es of different depth. In this section,
-we turn to the localisation task of the challenge, which we ha ve won in 2014 with 25.3%error. It
-can be seen as a special case of object detection, where a sing le object bounding box should be
-predictedforeach ofthe top-5classes, irrespectiveof the actual numberofobjectsof the class. For
-thiswe adoptthe approachof Sermanetet al. (2014), the winn ersof the ILSVRC-2013localisation
-challenge,withafewmodiﬁcations. Ourmethodisdescribed inSect.A.1andevaluatedinSect.A.2.
-A.1 L OCALISATION CONVNET
-To perform object localisation, we use a very deep ConvNet, w here the last fully connected layer
-predicts the bounding box location instead of the class scor es. A bounding box is represented by
-a 4-D vector storing its center coordinates, width, and heig ht. There is a choice of whether the
-boundingbox prediction is shared across all classes (singl e-class regression, SCR (Sermanetet al.,
-2014))orisclass-speciﬁc(per-classregression,PCR).In theformercase,thelastlayeris4-D,while
-in the latter it is 4000-D (since there are 1000 classes in the dataset). Apart from the last bounding
-boxpredictionlayer,weuse theConvNetarchitectureD (Tab le1),whichcontains16weightlayers
-andwasfoundtobe thebest-performingin theclassiﬁcation task (Sect.4).
-Training. Training of localisation ConvNets is similar to that of the c lassiﬁcation ConvNets
-(Sect.3.1). Themaindifferenceisthatwereplacethelogis ticregressionobjectivewithaEuclidean
-loss,whichpenalisesthedeviationofthepredictedboundi ngboxparametersfromtheground-truth.
-We trainedtwo localisation models, each on a single scale: S= 256andS= 384(due to the time
-constraints,we didnot use trainingscale jitteringforour ILSVRC-2014submission). Trainingwas
-initialised with the correspondingclassiﬁcation models ( trained on the same scales), and the initial
-learning rate was set to 10−3. We exploredboth ﬁne-tuningall layers and ﬁne-tuningonly the ﬁrst
-two fully-connected layers, as done in (Sermanetetal., 201 4). The last fully-connected layer was
-initialisedrandomlyandtrainedfromscratch.
-Testing. We consider two testing protocols. The ﬁrst is used for compa ring different network
-modiﬁcations on the validation set, and considers only the b oundingbox prediction for the ground
-truth class (to factor out the classiﬁcation errors). The bo unding box is obtained by applying the
-networkonlyto thecentralcropoftheimage.
-The second, fully-ﬂedged, testing procedure is based on the dense application of the localisation
-ConvNet to the whole image, similarly to the classiﬁcation t ask (Sect. 3.2). The difference is that
-instead of the class score map, the output of the last fully-c onnected layer is a set of bounding
-box predictions. To come up with the ﬁnal prediction, we util ise the greedy merging procedure
-of Sermanetetal. (2014), which ﬁrst merges spatially close predictions (by averaging their coor-
-dinates), and then rates them based on the class scores, obta ined from the classiﬁcation ConvNet.
-When several localisation ConvNets are used, we ﬁrst take th e union of their sets of boundingbox
-predictions, and then run the mergingprocedureon the union . We did not use the multiple pooling
-10
-Publishedasa conferencepaperat ICLR2015
-offsets technique of Sermanetetal. (2014), which increase s the spatial resolution of the bounding
-boxpredictionsandcanfurtherimprovetheresults.
-A.2 L OCALISATION EXPERIMENTS
-In this section we ﬁrst determine the best-performinglocal isation setting (using the ﬁrst test proto-
-col), and then evaluate it in a fully-ﬂedged scenario (the se cond protocol). The localisation error
-is measured according to the ILSVRC criterion (Russakovsky et al., 2014), i.e. the bounding box
-predictionis deemed correctif its intersectionoverunion ratio with the ground-truthboundingbox
-isabove0.5.
-Settings comparison. As can be seen from Table 8, per-class regression (PCR) outpe rforms the
-class-agnostic single-class regression (SCR), which diff ers from the ﬁndings of Sermanetetal.
-(2014), where PCR was outperformed by SCR. We also note that ﬁ ne-tuning all layers for the lo-
-calisation task leads to noticeablybetter results than ﬁne -tuningonly the fully-connectedlayers(as
-donein(Sermanetet al.,2014)). Intheseexperiments,thes mallestimagessidewassetto S= 384;
-theresultswith S= 256exhibitthesamebehaviourandarenotshownforbrevity.
-Table 8:Localisation error for different modiﬁcations with the simpliﬁed testing protocol: the
-boundingbox is predictedfrom a single central image crop, a nd the ground-truthclass is used. All
-ConvNet layers (except for the last one) have the conﬁgurati on D (Table 1), while the last layer
-performseithersingle-classregression(SCR) orper-clas sregression(PCR).
-Fine-tunedlayers regression type GTclass localisationerror
-1st and2nd FCSCR 36.4
-PCR 34.3
-all PCR 33.1
-Fully-ﬂedgedevaluation. Havingdeterminedthebestlocalisationsetting(PCR,ﬁne- tuningofall
-layers),we nowapply it in the fully-ﬂedgedscenario,where the top-5class labelsare predictedus-
-ing our best-performingclassiﬁcation system (Sect. 4.5), and multiple densely-computedbounding
-box predictions are merged using the method of Sermanetetal . (2014). As can be seen from Ta-
-ble 9, applicationof the localisationConvNetto the whole i magesubstantiallyimprovesthe results
-compared to using a center crop (Table 8), despite using the t op-5 predicted class labels instead of
-thegroundtruth. Similarlytotheclassiﬁcationtask(Sect .4),testingatseveralscalesandcombining
-thepredictionsofmultiplenetworksfurtherimprovesthep erformance.
-Table9:Localisationerror
-smallestimage side top-5localisationerror (%)
-train(S) test(Q) val. test.
-256 256 29.5 -
-384 384 28.2 26.7
-384 352,384 27.5 -
-fusion: 256/256 and 384/352,384 26.9 25.3
-Comparison with the state of the art. We compare our best localisation result with the state
-of the art in Table 10. With 25.3%test error, our “VGG” team won the localisation challenge of
-ILSVRC-2014 (Russakovskyet al., 2014). Notably, our resul ts are considerably better than those
-of the ILSVRC-2013winnerOverfeat(Sermanetet al., 2014), even thoughwe used less scales and
-did not employ their resolution enhancement technique. We e nvisage that better localisation per-
-formance can be achieved if this technique is incorporated i nto our method. This indicates the
-performanceadvancementbroughtbyourverydeepConvNets– wegotbetterresultswithasimpler
-localisationmethod,buta morepowerfulrepresentation.
-B GENERALISATION OF VERYDEEPFEATURES
-In the previous sections we have discussed training and eval uation of very deep ConvNets on the
-ILSVRC dataset. In this section, we evaluate our ConvNets, p re-trained on ILSVRC, as feature
-11
-Publishedasa conferencepaperat ICLR2015
-Table 10: Comparison with the state of the art in ILSVRC localisation . Our methodis denoted
-as“VGG”.
-Method top-5val. error (%) top-5 testerror (%)
-VGG 26.9 25.3
-GoogLeNet (Szegedyet al., 2014) - 26.7
-OverFeat (Sermanet etal.,2014) 30.0 29.9
-Krizhevsky et al.(Krizhevsky et al.,2012) - 34.2
-extractors on other, smaller, datasets, where training lar ge models from scratch is not feasible due
-to over-ﬁtting. Recently, there has been a lot of interest in such a use case (Zeiler&Fergus, 2013;
-Donahueet al., 2013; Razavianet al., 2014; Chatﬁeldet al., 2014), as it turns out that deep image
-representations,learntonILSVRC,generalisewelltoothe rdatasets,wheretheyhaveoutperformed
-hand-crafted representations by a large margin. Following that line of work, we investigate if our
-modelsleadtobetterperformancethanmoreshallowmodelsu tilisedinthestate-of-the-artmethods.
-In this evaluation, we consider two models with the best clas siﬁcation performance on ILSVRC
-(Sect.4)–conﬁgurations“Net-D”and“Net-E”(whichwemade publiclyavailable).
-To utilise the ConvNets, pre-trained on ILSVRC, for image cl assiﬁcation on other datasets, we
-remove the last fully-connected layer (which performs 1000 -way ILSVRC classiﬁcation), and use
-4096-Dactivationsofthepenultimatelayerasimagefeatur es,whichareaggregatedacrossmultiple
-locations and scales. The resulting image descriptor is L2-normalised and combined with a linear
-SVM classiﬁer, trained on the target dataset. For simplicit y, pre-trained ConvNet weights are kept
-ﬁxed(noﬁne-tuningisperformed).
-Aggregation of features is carried out in a similar manner to our ILSVRC evaluation procedure
-(Sect. 3.2). Namely, an image is ﬁrst rescaled so that its sma llest side equals Q, and then the net-
-work is densely applied over the image plane (which is possib le when all weight layers are treated
-as convolutional). We then perform global average pooling o n the resulting feature map, which
-producesa 4096-Dimage descriptor. The descriptor is then a veraged with the descriptor of a hori-
-zontally ﬂipped image. As was shown in Sect. 4.2, evaluation over multiple scales is beneﬁcial, so
-we extract features over several scales Q. The resulting multi-scale features can be either stacked
-or pooled across scales. Stacking allows a subsequent class iﬁer to learn how to optimally combine
-image statistics over a range of scales; this, however, come s at the cost of the increased descriptor
-dimensionality. We returntothediscussionofthisdesignc hoicein theexperimentsbelow. We also
-assess late fusion of features, computed using two networks , which is performed by stacking their
-respectiveimagedescriptors.
-Table11: Comparisonwiththestateoftheartinimageclassiﬁcationo nVOC-2007,VOC-2012,
-Caltech-101, and Caltech-256 . Our models are denoted as “VGG”. Results marked with * were
-achievedusingConvNetspre-trainedonthe extended ILSVRCdataset(2000classes).
-MethodVOC-2007 VOC-2012 Caltech-101 Caltech-256
-(meanAP) (mean AP) (meanclass recall) (mean class recall)
-Zeiler& Fergus (Zeiler&Fergus, 2013) - 79.0 86.5±0.5 74.2±0.3
-Chatﬁeldetal. (Chatﬁeldet al., 2014) 82.4 83.2 88.4±0.6 77.6±0.1
-He etal. (Heet al.,2014) 82.4 - 93.4±0.5 -
-Weiet al.(Weiet al., 2014) 81.5(85.2∗)81.7 (90.3∗) - -
-VGGNet-D (16layers) 89.3 89.0 91.8±1.0 85.0±0.2
-VGGNet-E(19 layers) 89.3 89.0 92.3±0.5 85.1±0.3
-VGGNet-D & Net-E 89.7 89.3 92.7±0.5 86.2±0.3
-Image Classiﬁcation on VOC-2007and VOC-2012. We beginwith the evaluationon the image
-classiﬁcation task of PASCAL VOC-2007 and VOC-2012 benchma rks (Everinghametal., 2015).
-These datasets contain 10K and 22.5K images respectively, a nd each image is annotated with one
-or several labels, correspondingto 20 object categories. T he VOC organisersprovidea pre-deﬁned
-split into training, validation, and test data (the test dat a for VOC-2012 is not publicly available;
-instead,anofﬁcialevaluationserverisprovided). Recogn itionperformanceismeasuredusingmean
-averageprecision(mAP)acrossclasses.
-Notably, by examining the performance on the validation set s of VOC-2007 and VOC-2012, we
-foundthat aggregatingimage descriptors,computedat mult iple scales, by averagingperformssim-
-12
-Publishedasa conferencepaperat ICLR2015
-ilarly to the aggregation by stacking. We hypothesize that t his is due to the fact that in the VOC
-dataset the objects appear over a variety of scales, so there is no particular scale-speciﬁc seman-
-tics which a classiﬁer could exploit. Since averaging has a b eneﬁt of not inﬂating the descrip-
-tor dimensionality, we were able to aggregated image descri ptors over a wide range of scales:
-Q∈ {256,384,512,640,768}. It is worth noting though that the improvement over a smalle r
-rangeof{256,384,512}wasrathermarginal( 0.3%).
-Thetestsetperformanceisreportedandcomparedwithother approachesinTable11. Ournetworks
-“Net-D”and“Net-E”exhibitidenticalperformanceonVOCda tasets,andtheircombinationslightly
-improves the results. Our methods set the new state of the art across image representations, pre-
-trained on the ILSVRC dataset, outperformingthe previousb est result of Chatﬁeldet al. (2014) by
-more than 6%. It should be noted that the method of Wei et al. (2014), which achieves1%better
-mAP on VOC-2012, is pre-trained on an extended 2000-class IL SVRC dataset, which includes
-additional 1000 categories, semantically close to those in VOC datasets. It also beneﬁts from the
-fusionwith anobjectdetection-assistedclassiﬁcation pi peline.
-ImageClassiﬁcationonCaltech-101andCaltech-256. Inthissectionweevaluateverydeepfea-
-turesonCaltech-101(Fei-Feiet al.,2004)andCaltech-256 (Grifﬁnet al.,2007)imageclassiﬁcation
-benchmarks. Caltech-101contains9Kimageslabelledinto1 02classes(101objectcategoriesanda
-backgroundclass), while Caltech-256 is larger with 31K ima ges and 257 classes. A standard eval-
-uation protocolon these datasets is to generateseveral ran domsplits into training and test data and
-report the average recognition performance across the spli ts, which is measured by the mean class
-recall(whichcompensatesforadifferentnumberoftestima gesperclass). FollowingChatﬁeld etal.
-(2014); Zeiler&Fergus(2013); He etal. (2014),onCaltech- 101we generated3 randomsplits into
-training and test data, so that each split contains 30 traini ng images per class, and up to 50 test
-images per class. On Caltech-256 we also generated 3 splits, each of which contains 60 training
-images per class (and the rest is used for testing). In each sp lit, 20% of training images were used
-asa validationset forhyper-parameterselection.
-We found that unlike VOC, on Caltech datasets the stacking of descriptors, computed over multi-
-ple scales, performs better than averaging or max-pooling. This can be explained by the fact that
-in Caltech images objects typically occupy the whole image, so multi-scale image features are se-
-manticallydifferent(capturingthe wholeobject vs. object parts), andstacking allows a classiﬁer to
-exploitsuchscale-speciﬁcrepresentations. We usedthree scalesQ∈ {256,384,512}.
-Ourmodelsarecomparedtoeachotherandthestateofthearti nTable11. Ascanbeseen,thedeeper
-19-layerNet-Eperformsbetterthanthe16-layerNet-D,and theircombinationfurtherimprovesthe
-performance. On Caltech-101, our representations are comp etitive with the approach of He etal.
-(2014),which,however,performssigniﬁcantlyworsethano urnetsonVOC-2007. OnCaltech-256,
-ourfeaturesoutperformthestate oftheart (Chatﬁeldetal. , 2014)byalargemargin( 8.6%).
-Action Classiﬁcation on VOC-2012. We also evaluated our best-performing image representa-
-tion (the stacking of Net-D and Net-E features) on the PASCAL VOC-2012 action classiﬁcation
-task (Everinghamet al., 2015), which consists in predictin g an action class from a single image,
-given a bounding box of the person performing the action. The dataset contains 4.6K training im-
-ages,labelledinto11classes. SimilarlytotheVOC-2012ob jectclassiﬁcationtask,theperformance
-is measured using the mAP. We considered two training settin gs: (i) computing the ConvNet fea-
-turesonthewholeimageandignoringtheprovidedboundingb ox;(ii)computingthefeaturesonthe
-wholeimageandontheprovidedboundingbox,andstackingth emtoobtaintheﬁnalrepresentation.
-TheresultsarecomparedtootherapproachesinTable12.
-OurrepresentationachievesthestateofartontheVOCactio nclassiﬁcationtaskevenwithoutusing
-the provided bounding boxes, and the results are further imp roved when using both images and
-bounding boxes. Unlike other approaches, we did not incorpo rate any task-speciﬁc heuristics, but
-reliedontherepresentationpowerofverydeepconvolution alfeatures.
-Other Recognition Tasks. Since the public release of our models, they have been active ly used
-by the research community for a wide range of image recogniti on tasks, consistently outperform-
-ing more shallow representations. For instance, Girshicke t al. (2014) achieve the state of the
-object detection results by replacing the ConvNet of Krizhe vskyet al. (2012) with our 16-layer
-model. Similar gains over a more shallow architecture of Kri zhevskyet al. (2012) have been ob-
-13
-Publishedasa conferencepaperat ICLR2015
-Table 12: Comparison with the state of the art in single-image action c lassiﬁcation on VOC-
-2012. Our models are denoted as “VGG”. Results marked with * were a chieved using ConvNets
-pre-trainedonthe extended ILSVRCdataset (1512classes).
-Method VOC-2012 (meanAP)
-(Oquab et al., 2014) 70.2∗
-(Gkioxari etal.,2014) 73.6
-(Hoai,2014) 76.3
-VGG Net-D& Net-E,image-only 79.2
-VGG Net-D& Net-E,image and bounding box 84.0
-served in semantic segmentation (Longet al., 2014), image c aption generation (Kirosetal., 2014;
-Karpathy& Fei-Fei, 2014),textureandmaterialrecognitio n(Cimpoiet al., 2014; Bell etal., 2014).
-C PAPERREVISIONS
-Here we present the list of major paper revisions, outlining the substantial changes for the conve-
-nienceofthe reader.
-v1Initialversion. Presentstheexperimentscarriedoutbefo rethe ILSVRCsubmission.
-v2Addspost-submissionILSVRCexperimentswithtrainingset augmentationusingscalejittering,
-whichimprovestheperformance.
-v3Addsgeneralisationexperiments(AppendixB) on PASCAL VOC andCaltech image classiﬁca-
-tiondatasets. Themodelsusedforthese experimentsarepub liclyavailable.
-v4The paper is converted to ICLR-2015 submission format. Also adds experiments with multiple
-cropsforclassiﬁcation.
-v6Camera-readyICLR-2015conferencepaper. Addsa compariso nof the net B with a shallow net
-andtheresultsonPASCAL VOCactionclassiﬁcationbenchmar k.
-14
+
+
+
+Table 2: The Transformer achieves better BLEU scores than previous state-of-the-art models on the English-to-German and English-to-French newstest2014 tests at a fraction of the training cost.
+
+| Model                            |       | BLEU  | Training Cost (FLOPs) |            |
+| -------------------------------- | ----- | ----- | --------------------- | ---------- |
+|                                  | EN-DE | EN-FR | EN-DE                 | EN-FR      |
+| ByteNet \[18]                    | 23.75 |       |                       |            |
+| Deep-Att + PosUnk \[39]          |       | 39.2  | 1.0 · 1020            |            |
+| GNMT + RL \[38]                  | 24.6  | 39.92 | 2.3 · 1019            | 1.4 · 1020 |
+| ConvS2S \[9]                     | 25.16 | 40.46 | 9.6 · 1018            | 1.5 · 1020 |
+| MoE \[32]                        | 26.03 | 40.56 | 2.0 · 1019            | 1.2 · 1020 |
+| Deep-Att + PosUnk Ensemble \[39] |       | 40.4  |                       | 8.0 · 1020 |
+| GNMT + RL Ensemble \[38]         | 26.30 | 41.16 | 1.8 · 1020            | 1.1 · 1021 |
+| ConvS2S Ensemble \[9]            | 26.36 | 41.29 | 7.7 · 1019            | 1.2 · 1021 |
+| Transformer (base model)         | 27.3  | 38.1  | 3.3 · 1018            |            |
+| Transformer (big)                | 28.4  | 41.8  | 2.3 · 1019            |            |
+
+Residual Dropout We apply dropout [33] to the output of each sub-layer, before it is added to the sub-layer input and normalized. In addition, we apply dropout to the sums of the embeddings and the positional encodings in both the encoder and decoder stacks. For the base model, we use a rate of Pdrop = 0.1.
+
+Label Smoothing During training, we employed label smoothing of value ϵls = 0.1 [36]. This hurts perplexity, as the model learns to be more unsure, but improves accuracy and BLEU score.
+
+# 6 Results
+
+# 6.1 Machine Translation
+
+On the WMT 2014 English-to-German translation task, the big transformer model (Transformer (big) in Table 2) outperforms the best previously reported models (including ensembles) by more than 2.0 BLEU, establishing a new state-of-the-art BLEU score of 28.4. The configuration of this model is listed in the bottom line of Table 3. Training took 3.5 days on 8 P100 GPUs. Even our base model surpasses all previously published models and ensembles, at a fraction of the training cost of any of the competitive models.
+
+On the WMT 2014 English-to-French translation task, our big model achieves a BLEU score of 41.0, outperforming all of the previously published single models, at less than 1/4 the training cost of the previous state-of-the-art model. The Transformer (big) model trained for English-to-French used dropout rate Pdrop = 0.1, instead of 0.3.
+
+For the base models, we used a single model obtained by averaging the last 5 checkpoints, which were written at 10-minute intervals. For the big models, we averaged the last 20 checkpoints. We used beam search with a beam size of 4 and length penalty α = 0.6 [38]. These hyperparameters were chosen after experimentation on the development set. We set the maximum output length during inference to input length + 50, but terminate early when possible [38].
+
+Table 2 summarizes our results and compares our translation quality and training costs to other model architectures from the literature. We estimate the number of floating point operations used to train a model by multiplying the training time, the number of GPUs used, and an estimate of the sustained single-precision floating-point capacity of each GPU.
+
+# 6.2 Model Variations
+
+To evaluate the importance of different components of the Transformer, we varied our base model in different ways, measuring the change in performance on English-to-German translation on the
+
+We used values of 2.8, 3.7, 6.0 and 9.5 TFLOPS for K80, K40, M40 and P100, respectively.
+
+
+
+
+
+
+# Table 3: Variations on the Transformer architecture.
+
+Unlisted values are identical to those of the base model. All metrics are on the English-to-German translation development set, newstest2013. Listed perplexities are per-wordpiece, according to our byte-pair encoding, and should not be compared to per-word perplexities.
+
+|      | N | dmodel | dff  | h   | dk  | dv                                        | Pdrop | ϵls  | train steps | PPL (dev) | BLEU (dev) | params ×106 |      |   |
+| ---- | - | ------ | ---- | --- | --- | ----------------------------------------- | ----- | ---- | ----------- | --------- | ---------- | ----------- | ---- | - |
+| base | 6 | 512    | 2048 | 8   | 64  | 64                                        | 0.1   | 0.1  | 100K        | 4.92      | 25.8       | 65          |      |   |
+|      |   |        |      | 1   | 512 | 512                                       |       |      |             |           |            | 5.29        | 24.9 |   |
+| (A)  |   |        |      | 4   | 128 | 128                                       |       |      |             |           | 5.00       | 25.5        |      |   |
+|      |   |        |      | 16  | 32  | 32                                        |       |      |             |           | 4.91       | 25.8        |      |   |
+|      |   |        |      | 32  | 16  | 16                                        |       |      |             |           | 5.01       | 25.4        |      |   |
+| (B)  |   |        |      | 16  |     |                                           |       |      |             | 5.16      | 25.1       | 58          |      |   |
+|      |   |        |      | 32  |     |                                           |       |      |             |           | 5.01       | 25.4        | 60   |   |
+|      | 2 |        |      |     |     |                                           |       |      |             | 6.11      | 23.7       | 36          |      |   |
+|      | 4 |        |      |     |     |                                           |       |      |             | 5.19      | 25.3       | 50          |      |   |
+|      | 8 |        |      |     |     |                                           |       |      |             | 4.88      | 25.5       | 80          |      |   |
+| (C)  |   | 256    |      | 32  | 32  |                                           |       |      | 5.75        | 24.5      | 28         |             |      |   |
+|      |   | 1024   |      | 128 | 128 |                                           |       |      | 4.66        | 26.0      | 168        |             |      |   |
+|      |   |        | 1024 |     |     |                                           |       |      |             | 5.12      | 25.4       | 53          |      |   |
+|      |   |        | 4096 |     |     |                                           |       |      |             | 4.75      | 26.2       | 90          |      |   |
+|      |   |        |      |     |     | 0.0                                       |       |      | 5.77        | 24.6      |            |             |      |   |
+| (D)  |   |        |      |     |     | 0.2                                       | 0.0   |      | 4.95        | 25.5      |            |             |      |   |
+|      |   |        |      |     |     |                                           |       |      | 4.67        | 25.3      |            |             |      |   |
+|      |   |        |      |     |     | 0.2                                       |       |      | 5.47        | 25.7      |            |             |      |   |
+| (E)  |   |        |      |     |     | positional embedding instead of sinusoids |       |      | 4.92        | 25.7      |            |             |      |   |
+| big  | 6 | 1024   | 4096 | 16  |     | 0.3                                       |       | 300K | 4.33        | 26.4      | 213        |             |      |   |
+
+development set, newstest2013. We used beam search as described in the previous section, but no checkpoint averaging. We present these results in Table 3.
+
+In Table 3 rows (A), we vary the number of attention heads and the attention key and value dimensions, keeping the amount of computation constant, as described in Section 3.2.2. While single-head attention is 0.9 BLEU worse than the best setting, quality also drops off with too many heads.
+
+In Table 3 rows (B), we observe that reducing the attention key size dk hurts model quality. This suggests that determining compatibility is not easy and that a more sophisticated compatibility function than dot product may be beneficial. We further observe in rows (C) and (D) that, as expected, bigger models are better, and dropout is very helpful in avoiding over-fitting. In row (E) we replace our sinusoidal positional encoding with learned positional embeddings [9], and observe nearly identical results to the base model.
+
+# 6.3 English Constituency Parsing
+
+To evaluate if the Transformer can generalize to other tasks we performed experiments on English constituency parsing. This task presents specific challenges: the output is subject to strong structural constraints and is significantly longer than the input. Furthermore, RNN sequence-to-sequence models have not been able to attain state-of-the-art results in small-data regimes [37].
+
+We trained a 4-layer transformer with dmodel = 1024 on the Wall Street Journal (WSJ) portion of the Penn Treebank [25], about 40K training sentences. We also trained it in a semi-supervised setting, using the larger high-confidence and BerkleyParser corpora from with approximately 17M sentences [37]. We used a vocabulary of 16K tokens for the WSJ only setting and a vocabulary of 32K tokens for the semi-supervised setting.
+
+We performed only a small number of experiments to select the dropout, both attention and residual (section 5.4), learning rates and beam size on the Section 22 development set, all other parameters remained unchanged from the English-to-German base translation model. During inference, we
+
+
+
+
+
+
+# Table 4: The Transformer generalizes well to English constituency parsing (Results are on Section 23 of WSJ)
+
+| Parser                               | Training                 | WSJ 23 F1 |
+| ------------------------------------ | ------------------------ | --------- |
+| Vinyals & Kaiser el al. (2014) \[37] | WSJ only, discriminative | 88.3      |
+| Petrov et al. (2006) \[29]           | WSJ only, discriminative | 90.4      |
+| Zhu et al. (2013) \[40]              | WSJ only, discriminative | 90.4      |
+| Dyer et al. (2016) \[8]              | WSJ only, discriminative | 91.7      |
+| Transformer (4 layers)               | WSJ only, discriminative | 91.3      |
+| Zhu et al. (2013) \[40]              | semi-supervised          | 91.3      |
+| Huang & Harper (2009) \[14]          | semi-supervised          | 91.3      |
+| McClosky et al. (2006) \[26]         | semi-supervised          | 92.1      |
+| Vinyals & Kaiser el al. (2014) \[37] | semi-supervised          | 92.1      |
+| Transformer (4 layers)               | semi-supervised          | 92.7      |
+| Luong et al. (2015) \[23]            | multi-task               | 93.0      |
+| Dyer et al. (2016) \[8]              | generative               | 93.3      |
+
+increased the maximum output length to input length + 300. We used a beam size of 21 and α = 0.3 for both WSJ only and the semi-supervised setting.
+
+Our results in Table 4 show that despite the lack of task-specific tuning our model performs surprisingly well, yielding better results than all previously reported models with the exception of the Recurrent Neural Network Grammar [8].
+
+In contrast to RNN sequence-to-sequence models [37], the Transformer outperforms the Berkeley-Parser [29] even when training only on the WSJ training set of 40K sentences.
+
+# 7 Conclusion
+
+In this work, we presented the Transformer, the first sequence transduction model based entirely on attention, replacing the recurrent layers most commonly used in encoder-decoder architectures with multi-headed self-attention.
+
+For translation tasks, the Transformer can be trained significantly faster than architectures based on recurrent or convolutional layers. On both WMT 2014 English-to-German and WMT 2014 English-to-French translation tasks, we achieve a new state of the art. In the former task our best model outperforms even all previously reported ensembles.
+
+We are excited about the future of attention-based models and plan to apply them to other tasks. We plan to extend the Transformer to problems involving input and output modalities other than text and to investigate local, restricted attention mechanisms to efficiently handle large inputs and outputs such as images, audio and video. Making generation less sequential is another research goals of ours.
+
+The code we used to train and evaluate our models is available at https://github.com/tensorflow/tensor2tensor.
+
+# Acknowledgements
+
+We are grateful to Nal Kalchbrenner and Stephan Gouws for their fruitful comments, corrections and inspiration.
+
+# References
+
+[1] Jimmy Lei Ba, Jamie Ryan Kiros, and Geoffrey E Hinton. Layer normalization. arXiv preprint arXiv:1607.06450, 2016.
+
+[2] Dzmitry Bahdanau, Kyunghyun Cho, and Yoshua Bengio. Neural machine translation by jointly learning to align and translate. CoRR, abs/1409.0473, 2014.
+
+[3] Denny Britz, Anna Goldie, Minh-Thang Luong, and Quoc V. Le. Massive exploration of neural machine translation architectures. CoRR, abs/1703.03906, 2017.
+
+[4] Jianpeng Cheng, Li Dong, and Mirella Lapata. Long short-term memory-networks for machine reading. arXiv preprint arXiv:1601.06733, 2016.
+
+
+
+
+
+
+# References
+
+1. Kyunghyun Cho, Bart van Merrienboer, Caglar Gulcehre, Fethi Bougares, Holger Schwenk, and Yoshua Bengio. Learning phrase representations using rnn encoder-decoder for statistical machine translation. CoRR, abs/1406.1078, 2014.
+2. Francois Chollet. Xception: Deep learning with depthwise separable convolutions. arXiv preprint arXiv:1610.02357, 2016.
+3. Junyoung Chung, Çaglar Gülçehre, Kyunghyun Cho, and Yoshua Bengio. Empirical evaluation of gated recurrent neural networks on sequence modeling. CoRR, abs/1412.3555, 2014.
+4. Chris Dyer, Adhiguna Kuncoro, Miguel Ballesteros, and Noah A. Smith. Recurrent neural network grammars. In Proc. of NAACL, 2016.
+5. Jonas Gehring, Michael Auli, David Grangier, Denis Yarats, and Yann N. Dauphin. Convolutional sequence to sequence learning. arXiv preprint arXiv:1705.03122v2, 2017.
+6. Alex Graves. Generating sequences with recurrent neural networks. arXiv preprint arXiv:1308.0850, 2013.
+7. Kaiming He, Xiangyu Zhang, Shaoqing Ren, and Jian Sun. Deep residual learning for image recognition. In Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition, pages 770–778, 2016.
+8. Sepp Hochreiter, Yoshua Bengio, Paolo Frasconi, and Jürgen Schmidhuber. Gradient flow in recurrent nets: the difficulty of learning long-term dependencies, 2001.
+9. Sepp Hochreiter and Jürgen Schmidhuber. Long short-term memory. Neural computation, 9(8):1735–1780, 1997.
+10. Zhongqiang Huang and Mary Harper. Self-training PCFG grammars with latent annotations across languages. In Proceedings of the 2009 Conference on Empirical Methods in Natural Language Processing, pages 832–841. ACL, August 2009.
+11. Rafal Jozefowicz, Oriol Vinyals, Mike Schuster, Noam Shazeer, and Yonghui Wu. Exploring the limits of language modeling. arXiv preprint arXiv:1602.02410, 2016.
+12. Łukasz Kaiser and Samy Bengio. Can active memory replace attention? In Advances in Neural Information Processing Systems, (NIPS), 2016.
+13. Łukasz Kaiser and Ilya Sutskever. Neural GPUs learn algorithms. In International Conference on Learning Representations (ICLR), 2016.
+14. Nal Kalchbrenner, Lasse Espeholt, Karen Simonyan, Aaron van den Oord, Alex Graves, and Koray Kavukcuoglu. Neural machine translation in linear time. arXiv preprint arXiv:1610.10099v2, 2017.
+15. Yoon Kim, Carl Denton, Luong Hoang, and Alexander M. Rush. Structured attention networks. In International Conference on Learning Representations, 2017.
+16. Diederik Kingma and Jimmy Ba. Adam: A method for stochastic optimization. In ICLR, 2015.
+17. Oleksii Kuchaiev and Boris Ginsburg. Factorization tricks for LSTM networks. arXiv preprint arXiv:1703.10722, 2017.
+18. Zhouhan Lin, Minwei Feng, Cicero Nogueira dos Santos, Mo Yu, Bing Xiang, Bowen Zhou, and Yoshua Bengio. A structured self-attentive sentence embedding. arXiv preprint arXiv:1703.03130, 2017.
+19. Minh-Thang Luong, Quoc V. Le, Ilya Sutskever, Oriol Vinyals, and Lukasz Kaiser. Multi-task sequence to sequence learning. arXiv preprint arXiv:1511.06114, 2015.
+20. Minh-Thang Luong, Hieu Pham, and Christopher D Manning. Effective approaches to attention-based neural machine translation. arXiv preprint arXiv:1508.04025, 2015.
+
+
+
+
+
+
+# References
+
+1. Mitchell P Marcus, Mary Ann Marcinkiewicz, and Beatrice Santorini. Building a large annotated corpus of english: The penn treebank. Computational linguistics, 19(2):313–330, 1993.
+2. David McClosky, Eugene Charniak, and Mark Johnson. Effective self-training for parsing. In Proceedings of the Human Language Technology Conference of the NAACL, Main Conference, pages 152–159. ACL, June 2006.
+3. Ankur Parikh, Oscar Täckström, Dipanjan Das, and Jakob Uszkoreit. A decomposable attention model. In Empirical Methods in Natural Language Processing, 2016.
+4. Romain Paulus, Caiming Xiong, and Richard Socher. A deep reinforced model for abstractive summarization. arXiv preprint arXiv:1705.04304, 2017.
+5. Slav Petrov, Leon Barrett, Romain Thibaux, and Dan Klein. Learning accurate, compact, and interpretable tree annotation. In Proceedings of the 21st International Conference on Computational Linguistics and 44th Annual Meeting of the ACL, pages 433–440. ACL, July 2006.
+6. Ofir Press and Lior Wolf. Using the output embedding to improve language models. arXiv preprint arXiv:1608.05859, 2016.
+7. Rico Sennrich, Barry Haddow, and Alexandra Birch. Neural machine translation of rare words with subword units. arXiv preprint arXiv:1508.07909, 2015.
+8. Noam Shazeer, Azalia Mirhoseini, Krzysztof Maziarz, Andy Davis, Quoc Le, Geoffrey Hinton, and Jeff Dean. Outrageously large neural networks: The sparsely-gated mixture-of-experts layer. arXiv preprint arXiv:1701.06538, 2017.
+9. Nitish Srivastava, Geoffrey E Hinton, Alex Krizhevsky, Ilya Sutskever, and Ruslan Salakhutdinov. Dropout: a simple way to prevent neural networks from overfitting. Journal of Machine Learning Research, 15(1):1929–1958, 2014.
+10. Sainbayar Sukhbaatar, Arthur Szlam, Jason Weston, and Rob Fergus. End-to-end memory networks. In C. Cortes, N. D. Lawrence, D. D. Lee, M. Sugiyama, and R. Garnett, editors, Advances in Neural Information Processing Systems 28, pages 2440–2448. Curran Associates, Inc., 2015.
+11. Ilya Sutskever, Oriol Vinyals, and Quoc VV Le. Sequence to sequence learning with neural networks. In Advances in Neural Information Processing Systems, pages 3104–3112, 2014.
+12. Christian Szegedy, Vincent Vanhoucke, Sergey Ioffe, Jonathon Shlens, and Zbigniew Wojna. Rethinking the inception architecture for computer vision. CoRR, abs/1512.00567, 2015.
+13. Vinyals &#x26; Kaiser, Koo, Petrov, Sutskever, and Hinton. Grammar as a foreign language. In Advances in Neural Information Processing Systems, 2015.
+14. Yonghui Wu, Mike Schuster, Zhifeng Chen, Quoc V Le, Mohammad Norouzi, Wolfgang Macherey, Maxim Krikun, Yuan Cao, Qin Gao, Klaus Macherey, et al. Google’s neural machine translation system: Bridging the gap between human and machine translation. arXiv preprint arXiv:1609.08144, 2016.
+15. Jie Zhou, Ying Cao, Xuguang Wang, Peng Li, and Wei Xu. Deep recurrent models with fast-forward connections for neural machine translation. CoRR, abs/1606.04199, 2016.
+16. Muhua Zhu, Yue Zhang, Wenliang Chen, Min Zhang, and Jingbo Zhu. Fast and accurate shift-reduce constituent parsing. In Proceedings of the 51st Annual Meeting of the ACL (Volume 1: Long Papers), pages 434–443. ACL, August 2013.
+
+
+
+
+
+
+
+# Input-Input Layer 5
+
+# Attention Visualizations
+
+governments registration
+
+American process
+
+majority passed making difficult
+
+since voting more
+
+spirit have laws 2009
+
+It is in this that a of new the or.
+
+It is this that a of the or.
+
+difficult in spirit more
+
+since process
+
+laws have new voting
+
+American majority passed 2009 making
+
+governments registration
+
+Figure 3: An example of the attention mechanism following long-distance dependencies in the encoder self-attention in layer 5 of 6. Many of the attention heads attend to a distant dependency of the verb ‘making’, completing the phrase ‘making...more difficult’. Attentions here shown only for the word ‘making’. Different colors represent different heads. Best viewed in color.
+
+
+
+
+
+
+
+# Input-Input Layer 5
+
+application missing <eos></eos>
+
+Law never perfect should what opinion </pad>
+
+The will be, but its be just- this is we are, in my.
+
+Input-Input Layer 5. <eos></eos>
+
+The, its - this, . <eos></eos>
+
+be perfect but be just is what are in my
+
+Law never should we missing </pad>
+
+will application opinion
+
+application missing <eos></eos>
+
+Law never perfect should what opinion </pad>
+
+The will be, but its be just- this is we are, in my.
+
+The, its - this, . <eos></eos>
+
+be perfect but be just is what are in my
+
+Law never should we missing </pad>
+
+will application opinion
+
+# Figure 4
+
+Two attention heads, also in layer 5 of 6, apparently involved in anaphora resolution. Top: Full attentions for head 5. Bottom: Isolated attentions from just the word ‘its’ for attention heads 5 and 6. Note that the attentions are very sharp for this word.
+
+
+
+
+
+
+Input-Input Layer 5
+
+application missing <eos></eos>
+
+Law never perfect should what opinion </pad>
+
+The will be , but its be just- thisis we are , in my .
+
+The , its - this , . <eos></eos>
+
+be perfectbut be just is what are in my
+
+Law never should we missing </pad>
+
+will application opinion
+
+Input-Input Layer 5
+
+application missing <eos></eos>
+
+Law never perfect should what opinion </pad>
+
+The will be , but its be just- thisis we are , in my .
+
+The , its - this , . <eos></eos>
+
+be perfectbut be just is what are in my
+
+Law never should we missing </pad>
+
+will application opinion
+
+Figure 5: Many of the attention heads exhibit behaviour that seems related to the structure of the sentence. We give two such examples above, from two different heads from the encoder self-attention at layer 5 of 6. The heads clearly learned to perform different tasks.
+
+
+
+
+===== Table Summaries for Attention All You Need.pdf =====
+
+
+--- TABLE 1 ---
+| Linear      | MatMul             | SoftMax | Concat |
+| ----------- | ------------------ | ------- | ------ |
+| Mask (opt.) | Scaled Dot-Product |         |        |
+| Scale       |                    |         |        |
+| MatMul      | Linear             | Linear  | Linear |
+| ↑           | ↑                  |         |        |
+| Q           | K                  |         |        |
+
+
+
+Summary 1:
+**Financial Table Summary:**  
+
+The table outlines key financial operations and their parameters:  
+
+1. **Operations:**  
+   - **Linear:** A fundamental operation (e.g., matrix multiplication or vector operations).  
+   - **MatMul:** Multi-dimensional matrix multiplication, with variants (e.g., linear, scaled dot-product).  
+   - **SoftMax:** A softmax operation for classification tasks.  
+   - **Concat:** Concatenation of tensors.  
+
+2. **Parameters:**  
+   - **Scale:** A scaling factor for MatMul operations.  
+   - **Mask (optional):** A mask for the Scaled Dot-Product operation (e.g., attention mechanisms).  
+
+3. **Key Details:**  
+   - MatMul variants include linear, scaled dot-product, and other specialized types.  
+   - SoftMax and Concat are distinct operations with no parameters.  
+   - Scale and Mask are critical parameters for the Scaled Dot-Product layer.  
+
+**Summary:**  
+The table highlights core operations (Linear, MatMul, SoftMax, Concat) and their parameters, emphasizing the role of Scale and Mask in the Scaled Dot-Product mechanism. MatMul variants support linear or specialized operations, while SoftMax and Concat are distinct tensor operations.
+
+--- TABLE 2 ---
+| Layer Type                  | Complexity per Layer | Sequential Operations | Maximum Path Length |
+| --------------------------- | -------------------- | --------------------- | ------------------- |
+| Self-Attention              | O(n2 · d)            | O(1)                  | O(1)                |
+| Recurrent                   | O(n · d2)            | O(n)                  | O(n)                |
+| Convolutional               | O(k · n · d2)        | O(1)                  | O(logk(n))          |
+| Self-Attention (restricted) | O(r · n · d)         | O(1)                  | O(n/r)              |
+
+
+
+Summary 2:
+### Financial Table Summary  
+
+Here is a concise summary of the table, highlighting key financial metrics for each layer type:  
+
+---
+
+#### **Layer Types and Complexity**  
+| Layer Type                  | Complexity (Time Complexity)       | Sequential Operations | Maximum Path Length       |  
+|-----------------------------|-------------------------------------|------------------------|---------------------------|  
+| **Self-Attention**          | $ O(n^2 \cdot d) $                | $ O(1) $              | $ O(1) $                 |  
+| **Recurrent**               | $ O(n \cdot d^2) $                | $ O(n) $              | $ O(n) $                 |  
+| **Convolutional**          | $ O(k \cdot n \cdot d^2) $        | $ O(1) $              | $ O(\log_k n) $         |  
+| **Self-Attention (restricted)** | $ O(r \cdot n \cdot d) $         | $ O(1) $              | $ O(n / r) $             |  
+
+---
+
+#### **Key Highlights**  
+1. **Complexity**:  
+   - **Self-Attention** and **Restricted Self-Attention** have higher complexity ($ O(n^2 \cdot d) $ or $ O(n \cdot d) $) due to their attention mechanisms.  
+   - **Recurrent** and **Convolutional** layers have lower complexity ($ O(n \cdot d^2) $ or $ O(k \cdot n \cdot d^2) $) but higher computational demands.  
+
+2. **Sequential Operations**:  
+   - All layers have $ O(1) $ sequential operations except **Recurrent**, which scales with the number of layers ($ O(n) $).  
+
+3. **Path Length**:  
+   - **Self-Attention** and **Restricted Self-Attention** have $ O(1) $ path lengths, while **Recurrent** and **Convolutional** scales with the input size ($ O(n) $ or $ O(\log_k n) $).  
+
+---
+
+This summary captures the trade-offs between computational efficiency, complexity, and path length for each layer type.
+
+--- TABLE 3 ---
+| Model                            |       | BLEU  | Training Cost (FLOPs) |            |
+| -------------------------------- | ----- | ----- | --------------------- | ---------- |
+|                                  | EN-DE | EN-FR | EN-DE                 | EN-FR      |
+| ByteNet \[18]                    | 23.75 |       |                       |            |
+| Deep-Att + PosUnk \[39]          |       | 39.2  | 1.0 · 1020            |            |
+| GNMT + RL \[38]                  | 24.6  | 39.92 | 2.3 · 1019            | 1.4 · 1020 |
+| ConvS2S \[9]                     | 25.16 | 40.46 | 9.6 · 1018            | 1.5 · 1020 |
+| MoE \[32]                        | 26.03 | 40.56 | 2.0 · 1019            | 1.2 · 1020 |
+| Deep-Att + PosUnk Ensemble \[39] |       | 40.4  |                       | 8.0 · 1020 |
+| GNMT + RL Ensemble \[38]         | 26.30 | 41.16 | 1.8 · 1020            | 1.1 · 1021 |
+| ConvS2S Ensemble \[9]            | 26.36 | 41.29 | 7.7 · 1019            | 1.2 · 1021 |
+| Transformer (base model)         | 27.3  | 38.1  | 3.3 · 1018            |            |
+| Transformer (big)                | 28.4  | 41.8  | 2.3 · 1019            |            |
+
+
+
+Summary 3:
+### Financial Table Summary  
+
+The table presents BLEU scores, training costs in FLOPs, and performance metrics for various translation models. Key highlights include:  
+
+#### **Top Performers**  
+- **Transformers (Base & Big)**: Achieve the highest BLEU scores (27.3 and 28.4 for EN-DE and EN-FR, respectively), demonstrating superior performance in translation tasks.  
+- **Ensembles**:  
+  - **Deep-Att + PosUnk Ensemble** (39.4 BLEU) and **GNMT + RL Ensemble** (41.16 BLEU) outperform single-model baselines, reflecting the benefits of ensemble strategies.  
+  - **ConvS2S Ensemble** (41.29 BLEU) and **MoE** (40.56 BLEU) show strong performance, with higher FLOPs costs but competitive results.  
+
+#### **Training Costs**  
+- **High Computational Demand**: Models like **GNMT + RL** (2.3 × 10¹⁹ FLOPs) and **ConvS2S** (9.6 × 10¹⁸ FLOPs) require significant resources, while **MoE** (2.0 × 10¹⁹ FLOPs) balances efficiency with performance.  
+- **Ensembles**: **GNMT + RL Ensemble** (1.8 × 10²⁰ FLOPs) and **ConvS2S Ensemble** (7.7 × 10¹⁹ FLOPs) scale performance with increased computational cost.  
+
+#### **Key Metrics**  
+- **BLEU Scores**:  
+  - **Transformer (Base)**: 27.3 (EN-DE) / 38.1 (EN-FR).  
+  - **Transformer (Big)**: 28.4 (EN-DE) / 41.8 (EN-FR).  
+  - **Ensembles**: **Deep-Att + PosUnk Ensemble** (40.4 BLEU) and **GNMT + RL Ensemble** (41.16 BLEU) lead in performance.  
+
+- **FLOPs**:  
+  - **High-cost models** (e.g., GNMT + RL, ConvS2S) require substantial computational resources, while **MoE** balances efficiency with accuracy.  
+
+#### **Conclusion**  
+The Transformer models dominate in translation accuracy (27.3–28.4 BLEU), with ensembles offering improved performance at higher computational costs. The training costs increase with model complexity, underscoring the trade-off between performance and resource usage.
+
+--- TABLE 4 ---
+|      | N | dmodel | dff  | h   | dk  | dv                                        | Pdrop | ϵls  | train steps | PPL (dev) | BLEU (dev) | params ×106 |      |   |
+| ---- | - | ------ | ---- | --- | --- | ----------------------------------------- | ----- | ---- | ----------- | --------- | ---------- | ----------- | ---- | - |
+| base | 6 | 512    | 2048 | 8   | 64  | 64                                        | 0.1   | 0.1  | 100K        | 4.92      | 25.8       | 65          |      |   |
+|      |   |        |      | 1   | 512 | 512                                       |       |      |             |           |            | 5.29        | 24.9 |   |
+| (A)  |   |        |      | 4   | 128 | 128                                       |       |      |             |           | 5.00       | 25.5        |      |   |
+|      |   |        |      | 16  | 32  | 32                                        |       |      |             |           | 4.91       | 25.8        |      |   |
+|      |   |        |      | 32  | 16  | 16                                        |       |      |             |           | 5.01       | 25.4        |      |   |
+| (B)  |   |        |      | 16  |     |                                           |       |      |             | 5.16      | 25.1       | 58          |      |   |
+|      |   |        |      | 32  |     |                                           |       |      |             |           | 5.01       | 25.4        | 60   |   |
+|      | 2 |        |      |     |     |                                           |       |      |             | 6.11      | 23.7       | 36          |      |   |
+|      | 4 |        |      |     |     |                                           |       |      |             | 5.19      | 25.3       | 50          |      |   |
+|      | 8 |        |      |     |     |                                           |       |      |             | 4.88      | 25.5       | 80          |      |   |
+| (C)  |   | 256    |      | 32  | 32  |                                           |       |      | 5.75        | 24.5      | 28         |             |      |   |
+|      |   | 1024   |      | 128 | 128 |                                           |       |      | 4.66        | 26.0      | 168        |             |      |   |
+|      |   |        | 1024 |     |     |                                           |       |      |             | 5.12      | 25.4       | 53          |      |   |
+|      |   |        | 4096 |     |     |                                           |       |      |             | 4.75      | 26.2       | 90          |      |   |
+|      |   |        |      |     |     | 0.0                                       |       |      | 5.77        | 24.6      |            |             |      |   |
+| (D)  |   |        |      |     |     | 0.2                                       | 0.0   |      | 4.95        | 25.5      |            |             |      |   |
+|      |   |        |      |     |     |                                           |       |      | 4.67        | 25.3      |            |             |      |   |
+|      |   |        |      |     |     | 0.2                                       |       |      | 5.47        | 25.7      |            |             |      |   |
+| (E)  |   |        |      |     |     | positional embedding instead of sinusoids |       |      | 4.92        | 25.7      |            |             |      |   |
+| big  | 6 | 1024   | 4096 | 16  |     | 0.3                                       |       | 300K | 4.33        | 26.4      | 213        |             |      |   |
+
+
+
+Summary 4:
+### Financial Model Summary  
+
+**Base Model**  
+- **Params**: 65×10⁶  
+- **PPL (Dev)**: 4.92  
+- **BLEU (Dev)**: 25.8  
+- **Train Steps**: 100K  
+- **Dropout (Pdrop)**: 0.1  
+- **Learning Rate (ϵls)**: 0.1  
+
+---
+
+**Configurations**  
+1. **(A)**  
+   - **Params**: 58×10⁶  
+   - **PPL (Dev)**: 25.5  
+   - **BLEU (Dev)**: 25.8  
+   - **Dropout (Pdrop)**: 0.1  
+
+2. **(B)**  
+   - **Params**: 58×10⁶  
+   - **PPL (Dev)**: 5.16  
+   - **BLEU (Dev)**: 25.1  
+   - **Dropout (Pdrop)**: 0.1  
+
+3. **(C)**  
+   - **Params**: 58×10⁶  
+   - **PPL (Dev)**: 4.66  
+   - **BLEU (Dev)**: 26.0  
+   - **Dropout (Pdrop)**: 0.1  
+
+4. **(D)**  
+   - **Params**: 58×10⁶  
+   - **PPL (Dev)**: 4.67  
+   - **BLEU (Dev)**: 25.3  
+   - **Dropout (Pdrop)**: 0.0  
+
+5. **(E)**  
+   - **Params**: 213×10⁶  
+   - **PPL (Dev)**: 4.92  
+   - **BLEU (Dev)**: 25.7  
+   - **Dropout (Pdrop)**: 0.2  
+   - **Train Steps**: 4.33  
+
+---
+
+**Key Observations**  
+- **Params**: The model scales with increasing depth (e.g., 213×10⁶ for (E) vs. 65×10⁶ for base).  
+- **Performance**:  
+  - **PPL (Dev)** decreases with model size, reflecting improved efficiency.  
+  - **BLEU scores** vary between 25.1–26.0, with (C) achieving the highest score (26.0).  
+  - **Dropout rates** differ: (D) uses 0.0 (no dropout), while others use 0.1 or 0.2.  
+  - **Train steps** scale with model size, with (E) having the highest (4.33) and base having 100K.  
+
+This summary highlights critical metrics for each configuration, emphasizing performance, parameter counts, and hyperparameters.
+
+--- TABLE 5 ---
+| Parser                               | Training                 | WSJ 23 F1 |
+| ------------------------------------ | ------------------------ | --------- |
+| Vinyals & Kaiser el al. (2014) \[37] | WSJ only, discriminative | 88.3      |
+| Petrov et al. (2006) \[29]           | WSJ only, discriminative | 90.4      |
+| Zhu et al. (2013) \[40]              | WSJ only, discriminative | 90.4      |
+| Dyer et al. (2016) \[8]              | WSJ only, discriminative | 91.7      |
+| Transformer (4 layers)               | WSJ only, discriminative | 91.3      |
+| Zhu et al. (2013) \[40]              | semi-supervised          | 91.3      |
+| Huang & Harper (2009) \[14]          | semi-supervised          | 91.3      |
+| McClosky et al. (2006) \[26]         | semi-supervised          | 92.1      |
+| Vinyals & Kaiser el al. (2014) \[37] | semi-supervised          | 92.1      |
+| Transformer (4 layers)               | semi-supervised          | 92.7      |
+| Luong et al. (2015) \[23]            | multi-task               | 93.0      |
+| Dyer et al. (2016) \[8]              | generative               | 93.3      |
+
+
+
+Summary 5:
+**Financial Table Summary**  
+
+The table outlines performance metrics for various machine learning models (parsers) across different training methods and datasets (WSJ 23 F1). Key highlights include:  
+
+1. **Highest Performance**:  
+   - **Luong et al. (2015) with multi-task training** achieved **93.0** (highest score).  
+   - **Dyer et al. (2016) with generative training** reached **93.3**, the second-highest score.  
+
+2. **Training Methods**:  
+   - **WSJ-only training** (discriminative): Achieved scores like **88.3** (Vinyals & Kaiser, 2014) and **90.4** (Petrov et al., 2006).  
+   - **Semi-supervised training** improved performance, with scores such as **91.7** (Dyer et al., 2016) and **92.7** (Transformer, 4 layers).  
+   - **Multi-task training** (e.g., Luong et al.) yielded the best results, emphasizing the benefits of combined tasks.  
+
+3. **Notable Results**:  
+   - **Vinyals & Kaiser (2014)** achieved **92.1** in semi-supervised settings.  
+   - **Transformer (4 layers)** achieved **91.3** in semi-supervised and **92.7** in semi-supervised.  
+
+The table underscores that **multi-task training** and **generative methods** consistently outperform WSJ-only approaches, while semi-supervised training balances performance across models.

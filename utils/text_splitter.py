@@ -4,8 +4,8 @@ from .logger import logger
 def split_text(text):
     logger.info("Splitting text into chunks")
     splitter = RecursiveCharacterTextSplitter(
-        chunk_size=500,
-        chunk_overlap=100
+        chunk_size=800,
+        chunk_overlap=150
     )
     chunks = splitter.split_text(text)
     logger.info(f"Created {len(chunks)} chunks")

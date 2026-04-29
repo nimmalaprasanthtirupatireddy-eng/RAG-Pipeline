@@ -1,5 +1,5 @@
 from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_community.llms import Ollama
+from langchain_groq import ChatGroq
 import os
 from langchain_community.vectorstores import FAISS
 from .logger import logger
@@ -7,7 +7,10 @@ from .pdf_reader import read_pdf_text
 from .text_splitter import split_text
 from .vector_store import create_or_update_vector_db
 from .llm_chain import build_llm_chain
+from dotenv import load_dotenv
+load_dotenv()
 
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
 class SimpleRAG:
 
@@ -16,7 +19,11 @@ class SimpleRAG:
         self.embeddings = HuggingFaceEmbeddings(
             model_name="sentence-transformers/all-MiniLM-L6-v2"
         )
-        self.llm = Ollama(model="qwen3:1.7b")
+        self.llm = ChatGroq(
+            model_name="openai/gpt-oss-120b",
+            temperature=0.2,
+            api_key=GROQ_API_KEY
+        )
         if os.path.exists("faiss_db"):
             logger.info("Loading existing FAISS database")
             self.vector_db = FAISS.load_local(

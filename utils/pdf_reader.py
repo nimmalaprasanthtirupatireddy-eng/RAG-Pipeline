@@ -132,10 +132,12 @@ import os
 import re
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import StrOutputParser
-from langchain_community.llms import Ollama
+from langchain_groq import ChatGroq
+from dotenv import load_dotenv
+load_dotenv()
 
-os.environ["LLAMA_CLOUD_API_KEY"] = "llx-oHKl7bqJ8b5HqVVuLqHsBn4LNRDOY5H2yGsLI1oOYELFZqWH"
-
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+LLAMA_CLOUD_API_KEY = os.getenv("LLAMA_CLOUD_API_KEY")
 
 def extract_markdown_tables(md_text):
 
@@ -146,7 +148,11 @@ def extract_markdown_tables(md_text):
 
 
 def read_pdf_text(pdf_path, output_dir="extracted_text"):
-    llm = Ollama(model="qwen3:1.7b")
+    llm = ChatGroq(
+        model_name="openai/gpt-oss-120b",
+        temperature=0.2,
+        api_key=GROQ_API_KEY
+    )
 
     logger.info(f"Reading PDF: {pdf_path}")
     document = LlamaParse(result_type="markdown").load_data(pdf_path)

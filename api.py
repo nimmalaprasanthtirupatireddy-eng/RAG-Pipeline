@@ -69,6 +69,8 @@
 #     return {"answer": answer}
 
 from fastapi import FastAPI, UploadFile, File
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 # from fastapi.responses import StreamingResponse
 import shutil
 import os
@@ -76,12 +78,24 @@ from utils.simple_rag import SimpleRAG
 
 app = FastAPI(title="Simple RAG API")
 
+app.mount("/static", StaticFiles(directory="frontend"), name = "/static")
 
 rag = SimpleRAG()
 
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
+@app.get("/")
+def serve_index():
+    return FileResponse("frontend/index.html")
+
+@app.get("/style.css")
+def css():
+    return FileResponse("frontend/style.css")
+
+@app.get("/script.js")
+def js():
+    return FileResponse("frontend/script.js")
 
 @app.post("/upload-pdf/")
 def upload_pdf(files: list[UploadFile] = File(...)):

@@ -3,3 +3,4 @@ __pycache__/
 *.pyc
 faiss_db/
 uploads/
+RAG_env/

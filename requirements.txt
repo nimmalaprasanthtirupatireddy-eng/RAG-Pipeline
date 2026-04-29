@@ -8,6 +8,7 @@ langchain-core==0.2.39
 langchain-community==0.2.16
 langchain-text-splitters==0.2.4
 langchain-huggingface==0.0.3
+langchain-groq==0.2.0
 
 # Embeddings + Vector DB
 sentence-transformers==5.1.2
@@ -15,6 +16,3 @@ faiss-cpu==1.9.0.post1
 
 # PDF
 llama-parse
-yt-dlp
-fastapi
-uvicorn

@@ -1,4 +1,4 @@
-from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_community.embeddings import SentenceTransformerEmbeddings
 from langchain_groq import ChatGroq
 import os
 from langchain_community.vectorstores import FAISS
@@ -16,8 +16,8 @@ class SimpleRAG:
 
     def __init__(self):
         logger.info("Initializing SimpleRAG")
-        self.embeddings = HuggingFaceEmbeddings(
-            model_name="sentence-transformers/all-MiniLM-L6-v2"
+        self.embeddings = SentenceTransformerEmbeddings(
+            model_name="all-MiniLM-L6-v2"
         )
         self.llm = ChatGroq(
             model_name="openai/gpt-oss-120b",

@@ -1,0 +1,67 @@
+
+
+===== File: invoice_Allen Armold_34304.pdf =====
+
+
+SuperStore INVOICE
+
+# # 34304
+
+Date: Oct 23 2012
+
+Bill To: Allen Armold
+
+Ship To: 91730, Rancho Cucamonga, California, United States
+
+Ship Mode: Standard Class
+
+Balance Due: $84.32
+
+| Item                                                     | Quantity | Rate   | Amount  |
+| -------------------------------------------------------- | -------- | ------ | ------- |
+| Avery Premier Heavy-Duty Binder with Round Locking Rings | 3        | $34.27 | $102.82 |
+| Subtotal:                                                |          |        | $102.82 |
+| Discount (20%):                                          |          |        | $20.56  |
+| Shipping:                                                |          |        | $2.06   |
+| Total:                                                   |          |        | $84.32  |
+
+# Notes:
+
+Thanks for your business!
+
+# Terms:
+
+Order ID: CA-2012-AA10375140-41205
+
+
+
+
+===== Table Summaries for invoice_Allen Armold_34304.pdf =====
+
+
+--- TABLE 1 ---
+| Item                                                     | Quantity | Rate   | Amount  |
+| -------------------------------------------------------- | -------- | ------ | ------- |
+| Avery Premier Heavy-Duty Binder with Round Locking Rings | 3        | $34.27 | $102.82 |
+| Subtotal:                                                |          |        | $102.82 |
+| Discount (20%):                                          |          |        | $20.56  |
+| Shipping:                                                |          |        | $2.06   |
+| Total:                                                   |          |        | $84.32  |
+
+
+
+Summary 1:
+**Financial Summary**
+
+- **Item Purchased:** Avery Premier Heavy‑Duty Binder with Round Locking Rings  
+- **Quantity:** 3 units  
+- **Unit Rate:** $34.27 each  
+- **Subtotal (before discounts & fees):** $102.82  
+
+**Adjustments**  
+- **Discount (20%):** –$20.56  
+- **Shipping Charge:** +$2.06  
+
+**Final Amount Due:** **$84.32**  
+
+The transaction reflects a 20 % discount on the original subtotal, a modest shipping fee, and results in a total payable of $84.32.
